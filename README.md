@@ -216,3 +216,13 @@ git clone https://github.com/liuzhao1225/YouDub-webui.git
 你也可以加入我们的微信群，扫描下方的二维码即可：
 
 ![WeChat Group](17ab2707ec88ddd8ad3fbd5c705d076b.png)
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=liuzhao1225%2FYouDub-webui&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=liuzhao1225/YouDub-webui&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=liuzhao1225/YouDub-webui&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=liuzhao1225/YouDub-webui&type=date&legend=top-left" />
+ </picture>
+</a>
