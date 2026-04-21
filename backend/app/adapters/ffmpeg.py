@@ -105,6 +105,7 @@ def merge_video(video_file: Path, dubbing_file: Path, bgm_file: Path, translatio
     tmp_dir = session / "tmp"
     media_dir = session / "media"
     tmp_dir.mkdir(parents=True, exist_ok=True)
+    media_dir.mkdir(parents=True, exist_ok=True)
     final_video = media_dir / "video_final.mp4"
     if final_video.exists():
         return final_video
