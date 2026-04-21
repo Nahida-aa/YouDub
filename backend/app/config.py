@@ -38,3 +38,9 @@ def openai_defaults() -> dict[str, str]:
         "api_key": os.getenv("OPENAI_API_KEY", ""),
         "model": os.getenv("OPENAI_MODEL") or os.getenv("OPENAI_MODEL_NAME") or "gpt-4o-mini",
     }
+
+
+def ytdlp_defaults() -> dict[str, str]:
+    return {
+        "proxy_port": os.getenv("YTDLP_PROXY_PORT", ""),
+    }

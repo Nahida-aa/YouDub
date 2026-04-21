@@ -23,8 +23,10 @@ import {
   getCurrentTask,
   getOpenAIModels,
   getOpenAISettings,
+  getYtdlpSettings,
   saveCookie,
   saveOpenAISettings,
+  saveYtdlpSettings,
 } from "@/lib/api"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -62,13 +64,18 @@ type SettingsForm = {
   baseUrl: string
   apiKey: string
   model: string
+  proxyPort: string
 }
+
+const SAVED_API_KEY_MASK = "********"
+const SAVED_COOKIE_MASK = "******** saved YouTube cookie ********"
 
 const defaultSettings: SettingsForm = {
   cookie: "",
   baseUrl: "https://api.openai.com/v1",
   apiKey: "",
   model: "gpt-4o-mini",
+  proxyPort: "",
 }
 
 function uniqueModels(models: string[]) {
@@ -101,6 +108,8 @@ export default function Home() {
   const [modelsLoaded, setModelsLoaded] = useState(false)
   const [modelsLoading, setModelsLoading] = useState(false)
   const [showApiKey, setShowApiKey] = useState(false)
+  const [cookieDirty, setCookieDirty] = useState(false)
+  const [apiKeyDirty, setApiKeyDirty] = useState(false)
 
   async function refreshTask() {
     const current = await getCurrentTask()
@@ -122,17 +131,20 @@ export default function Home() {
 
   useEffect(() => {
     if (!settingsOpen) return
-    Promise.all([getCookieInfo(), getOpenAISettings()])
-      .then(([, openai]) => {
+    Promise.all([getCookieInfo(), getOpenAISettings(), getYtdlpSettings()])
+      .then(([cookie, openai, ytdlp]) => {
         setSettings({
-          cookie: "",
+          cookie: cookie.exists ? SAVED_COOKIE_MASK : "",
           baseUrl: openai.base_url,
-          apiKey: "",
+          apiKey: openai.has_api_key ? openai.api_key || SAVED_API_KEY_MASK : "",
           model: openai.model,
+          proxyPort: ytdlp.proxy_port,
         })
         setModelOptions(uniqueModels([openai.model]))
         setModelsLoaded(false)
         setShowApiKey(false)
+        setCookieDirty(false)
+        setApiKeyDirty(false)
         setSettingsMessage(openai.has_api_key ? "OpenAI key is saved." : "")
       })
       .catch((err) => setSettingsMessage(err.message))
@@ -165,14 +177,22 @@ export default function Home() {
     event.preventDefault()
     setSettingsMessage("")
     try {
-      await saveCookie(settings.cookie)
-      await saveOpenAISettings({
+      const cookie = cookieDirty ? await saveCookie(settings.cookie) : null
+      const openai = await saveOpenAISettings({
         base_url: settings.baseUrl,
-        api_key: settings.apiKey,
+        api_key: apiKeyDirty ? settings.apiKey : "",
         model: settings.model,
       })
+      const ytdlp = await saveYtdlpSettings({ proxy_port: settings.proxyPort })
       setSettingsMessage("Settings saved.")
-      setSettings((current) => ({ ...current, apiKey: "", cookie: "" }))
+      setSettings((current) => ({
+        ...current,
+        apiKey: openai.has_api_key ? openai.api_key || SAVED_API_KEY_MASK : "",
+        cookie: cookieDirty ? (cookie?.exists ? SAVED_COOKIE_MASK : "") : current.cookie,
+        proxyPort: ytdlp.proxy_port,
+      }))
+      setCookieDirty(false)
+      setApiKeyDirty(false)
     } catch (err) {
       setSettingsMessage(err instanceof Error ? err.message : "Failed to save settings")
     }
@@ -184,7 +204,7 @@ export default function Home() {
     try {
       const response = await getOpenAIModels({
         base_url: settings.baseUrl,
-        api_key: settings.apiKey,
+        api_key: apiKeyDirty ? settings.apiKey : "",
       })
       const models = uniqueModels([settings.model, ...response.models])
       setModelOptions(models)
@@ -228,11 +248,32 @@ export default function Home() {
                       <Textarea
                         id="cookie"
                         value={settings.cookie}
-                        onChange={(event) =>
-                          setSettings((current) => ({ ...current, cookie: event.target.value }))
-                        }
+                        onFocus={(event) => {
+                          if (!cookieDirty && settings.cookie === SAVED_COOKIE_MASK) {
+                            event.currentTarget.select()
+                          }
+                        }}
+                        onChange={(event) => {
+                          setCookieDirty(true)
+                          setSettings((current) => ({
+                            ...current,
+                            cookie: event.target.value.replace(SAVED_COOKIE_MASK, ""),
+                          }))
+                        }}
                         placeholder="Paste Netscape cookie content"
                         className="min-h-44 max-h-[42dvh] overflow-auto font-mono text-xs leading-relaxed"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="proxyPort">yt-dlp proxy port</Label>
+                      <Input
+                        id="proxyPort"
+                        inputMode="numeric"
+                        value={settings.proxyPort}
+                        onChange={(event) =>
+                          setSettings((current) => ({ ...current, proxyPort: event.target.value }))
+                        }
+                        placeholder="7890"
                       />
                     </div>
                     <div className="grid gap-2">
@@ -252,9 +293,18 @@ export default function Home() {
                           id="apiKey"
                           type={showApiKey ? "text" : "password"}
                           value={settings.apiKey}
-                          onChange={(event) =>
-                            setSettings((current) => ({ ...current, apiKey: event.target.value }))
-                          }
+                          onFocus={(event) => {
+                            if (!apiKeyDirty && settings.apiKey === SAVED_API_KEY_MASK) {
+                              event.currentTarget.select()
+                            }
+                          }}
+                          onChange={(event) => {
+                            setApiKeyDirty(true)
+                            setSettings((current) => ({
+                              ...current,
+                              apiKey: event.target.value.replace(SAVED_API_KEY_MASK, ""),
+                            }))
+                          }}
                           placeholder="Leave blank to keep existing key"
                           className="pr-9"
                         />

@@ -19,9 +19,7 @@ from .youtube import extract_video_id
 def mask_secret(value: str) -> str:
     if not value:
         return ""
-    if len(value) <= 8:
-        return "********"
-    return f"{value[:4]}...{value[-4:]}"
+    return "********"
 
 
 class TaskCreate(BaseModel):
@@ -41,6 +39,22 @@ class OpenAISettingsUpdate(BaseModel):
 class OpenAIModelsRequest(BaseModel):
     base_url: str = ""
     api_key: str = ""
+
+
+class YtdlpSettingsUpdate(BaseModel):
+    proxy_port: str = ""
+
+
+def normalize_proxy_port(value: str) -> str:
+    proxy_port = value.strip()
+    if not proxy_port:
+        return ""
+    if not proxy_port.isdigit():
+        raise HTTPException(status_code=422, detail="Proxy port must be numeric.")
+    port = int(proxy_port)
+    if port < 1 or port > 65535:
+        raise HTTPException(status_code=422, detail="Proxy port must be between 1 and 65535.")
+    return str(port)
 
 
 @asynccontextmanager
@@ -172,3 +186,14 @@ def get_openai_models(payload: OpenAIModelsRequest) -> dict:
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Failed to fetch models: {exc}") from exc
     return {"models": models}
+
+
+@app.get("/api/settings/ytdlp")
+def get_ytdlp_settings() -> dict:
+    return database.get_ytdlp_settings()
+
+
+@app.post("/api/settings/ytdlp")
+def save_ytdlp_settings(payload: YtdlpSettingsUpdate) -> dict:
+    database.save_ytdlp_settings(normalize_proxy_port(payload.proxy_port))
+    return get_ytdlp_settings()

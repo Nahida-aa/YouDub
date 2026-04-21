@@ -21,9 +21,25 @@ def test_openai_key_is_masked(monkeypatch, tmp_path):
 
     assert response.status_code == 200
     body = response.json()
-    assert body["api_key"] == "sk-t...cret"
+    assert body["api_key"] == "********"
     assert body["has_api_key"] is True
     assert "sk-test-secret" not in str(body)
+
+
+def test_masked_openai_key_is_not_saved_back(monkeypatch, tmp_path):
+    configure_tmp_runtime(monkeypatch, tmp_path)
+    database.save_openai_settings("https://example.com/v1", "sk-test-secret", "test-model")
+    client = TestClient(main.app)
+
+    response = client.post(
+        "/api/settings/openai",
+        json={"base_url": "https://example.com/v1", "api_key": "********", "model": "next-model"},
+    )
+
+    assert response.status_code == 200
+    settings = database.get_openai_settings()
+    assert settings["api_key"] == "sk-test-secret"
+    assert settings["model"] == "next-model"
 
 
 def test_cookie_response_does_not_leak_content(monkeypatch, tmp_path):
@@ -101,3 +117,24 @@ def test_openai_models_can_use_saved_key(monkeypatch, tmp_path):
     assert response.status_code == 200
     assert response.json() == {"models": ["saved-model"]}
     assert captured == {"base_url": "https://saved.example/v1", "api_key": "sk-saved"}
+
+
+def test_ytdlp_proxy_port_settings(monkeypatch, tmp_path):
+    configure_tmp_runtime(monkeypatch, tmp_path)
+    client = TestClient(main.app)
+
+    saved = client.post("/api/settings/ytdlp", json={"proxy_port": "7890"})
+    loaded = client.get("/api/settings/ytdlp")
+
+    assert saved.status_code == 200
+    assert loaded.status_code == 200
+    assert loaded.json() == {"proxy_port": "7890"}
+
+
+def test_ytdlp_proxy_port_rejects_invalid_value(monkeypatch, tmp_path):
+    configure_tmp_runtime(monkeypatch, tmp_path)
+    client = TestClient(main.app)
+
+    response = client.post("/api/settings/ytdlp", json={"proxy_port": "70000"})
+
+    assert response.status_code == 422

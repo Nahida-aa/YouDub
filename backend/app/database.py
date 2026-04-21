@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .config import DB_PATH, ensure_runtime_dirs, openai_defaults
+from .config import DB_PATH, ensure_runtime_dirs, openai_defaults, ytdlp_defaults
 from .stages import STAGES
 
 
@@ -66,6 +66,11 @@ def init_db() -> None:
             conn.execute(
                 "INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
                 (f"openai.{key}", value, now_iso()),
+            )
+        for key, value in ytdlp_defaults().items():
+            conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
+                (f"ytdlp.{key}", value, now_iso()),
             )
 
 
@@ -214,9 +219,21 @@ def get_openai_settings() -> dict[str, str]:
 
 def save_openai_settings(base_url: str, api_key: str, model: str) -> None:
     set_setting("openai.base_url", base_url.strip())
-    if api_key.strip():
-        set_setting("openai.api_key", api_key.strip())
+    cleaned_api_key = api_key.strip()
+    if cleaned_api_key and set(cleaned_api_key) != {"*"}:
+        set_setting("openai.api_key", cleaned_api_key)
     set_setting("openai.model", model.strip())
+
+
+def get_ytdlp_settings() -> dict[str, str]:
+    defaults = ytdlp_defaults()
+    return {
+        "proxy_port": get_setting("ytdlp.proxy_port", defaults["proxy_port"]),
+    }
+
+
+def save_ytdlp_settings(proxy_port: str) -> None:
+    set_setting("ytdlp.proxy_port", proxy_port.strip())
 
 
 def log_path(task_id: str) -> Path:

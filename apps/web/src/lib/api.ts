@@ -48,6 +48,10 @@ export type OpenAIModels = {
   models: string[]
 }
 
+export type YtdlpSettings = {
+  proxy_port: string
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -106,6 +110,17 @@ export function getOpenAIModels(settings: {
   api_key: string
 }) {
   return request<OpenAIModels>("/api/settings/openai/models", {
+    method: "POST",
+    body: JSON.stringify(settings),
+  })
+}
+
+export function getYtdlpSettings() {
+  return request<YtdlpSettings>("/api/settings/ytdlp")
+}
+
+export function saveYtdlpSettings(settings: YtdlpSettings) {
+  return request<YtdlpSettings>("/api/settings/ytdlp", {
     method: "POST",
     body: JSON.stringify(settings),
   })

@@ -11,7 +11,13 @@ from ..sanitize import sanitize_text
 from ..youtube import extract_video_id
 
 
-def _ydl_base(cookie_path: Path) -> dict[str, Any]:
+def _proxy_url(proxy_port: str = "") -> str:
+    if proxy_port.strip():
+        return f"http://127.0.0.1:{proxy_port.strip()}"
+    return os.getenv("HTTP_PROXY") or os.getenv("http_proxy") or ""
+
+
+def _ydl_base(cookie_path: Path, proxy_port: str = "") -> dict[str, Any]:
     opts: dict[str, Any] = {
         "noplaylist": True,
         "quiet": True,
@@ -19,7 +25,7 @@ def _ydl_base(cookie_path: Path) -> dict[str, Any]:
     }
     if cookie_path.exists() and cookie_path.stat().st_size > 0:
         opts["cookiefile"] = str(cookie_path)
-    proxy = os.getenv("HTTP_PROXY")
+    proxy = _proxy_url(proxy_port)
     if proxy:
         opts["proxy"] = proxy
     return opts
@@ -32,9 +38,9 @@ def _session_path(workfolder: Path, info: dict[str, Any]) -> Path:
     return workfolder / uploader / f"{title}__{video_id}"
 
 
-def download_youtube(url: str, workfolder: Path, cookie_path: Path) -> tuple[Path, dict[str, Any]]:
+def download_youtube(url: str, workfolder: Path, cookie_path: Path, proxy_port: str = "") -> tuple[Path, dict[str, Any]]:
     video_id = extract_video_id(url)
-    info_opts = _ydl_base(cookie_path)
+    info_opts = _ydl_base(cookie_path, proxy_port)
     with yt_dlp.YoutubeDL(info_opts) as ydl:
         info = ydl.extract_info(url, download=False)
 
@@ -55,7 +61,7 @@ def download_youtube(url: str, workfolder: Path, cookie_path: Path) -> tuple[Pat
         return session, info
 
     download_opts = {
-        **_ydl_base(cookie_path),
+        **_ydl_base(cookie_path, proxy_port),
         "format": "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
         "merge_output_format": "mp4",
         "outtmpl": str(video_file),
@@ -69,4 +75,3 @@ def download_youtube(url: str, workfolder: Path, cookie_path: Path) -> tuple[Pat
         raise RuntimeError("yt-dlp finished without producing media/video_source.mp4")
 
     return session, info
-

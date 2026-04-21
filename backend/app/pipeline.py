@@ -123,7 +123,8 @@ class PipelineRunner:
     def _download(self, task: dict) -> None:
         from .adapters.ytdlp import download_youtube
 
-        session, _ = download_youtube(task["url"], WORKFOLDER, YOUTUBE_COOKIE_PATH)
+        proxy_port = database.get_ytdlp_settings()["proxy_port"]
+        session, _ = download_youtube(task["url"], WORKFOLDER, YOUTUBE_COOKIE_PATH, proxy_port)
         self.artifacts.session = session
         self.artifacts.video_file = session / "media" / "video_source.mp4"
         database.update_task(self.task_id, session_path=str(session))
@@ -195,4 +196,3 @@ class PipelineRunner:
 
 def run_task(task_id: str) -> None:
     PipelineRunner(task_id).run()
-
