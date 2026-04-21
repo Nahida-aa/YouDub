@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -45,9 +46,18 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="YouDub API", lifespan=lifespan)
+
+
+def cors_origins() -> list[str]:
+    defaults = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    configured = os.getenv("CORS_ALLOW_ORIGINS", "")
+    extra = [origin.strip() for origin in configured.split(",") if origin.strip()]
+    return [*defaults, *extra]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

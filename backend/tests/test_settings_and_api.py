@@ -49,3 +49,12 @@ def test_running_task_blocks_second_submit(monkeypatch, tmp_path):
     assert first.status_code == 201
     assert second.status_code == 409
 
+
+def test_cors_origins_include_runtime_configuration(monkeypatch):
+    monkeypatch.setenv("CORS_ALLOW_ORIGINS", "http://172.27.2.90:3000, http://100.94.222.54:3000")
+
+    origins = main.cors_origins()
+
+    assert "http://localhost:3000" in origins
+    assert "http://172.27.2.90:3000" in origins
+    assert "http://100.94.222.54:3000" in origins
