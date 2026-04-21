@@ -109,7 +109,7 @@ FunASR uses ModelScope model IDs directly. VoxCPM2 is downloaded through `models
 OpenBMB/VoxCPM2 -> data/modelscope/OpenBMB__VoxCPM2
 ```
 
-Set `MODEL_CACHE_DIR` to place model caches on a large disk, for example `/data2/liuzhao/modelscope_cache`.
+Set `MODEL_CACHE_DIR` to place model caches on a large disk, for example `/data1/liuzhao/modelscope_cache`.
 
 ## Test
 
