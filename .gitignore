@@ -168,3 +168,19 @@ download_list.txt
 get_upload_link.txt
 launch.json
 remove_mp4.py
+
+# YouDub full-stack runtime data
+data/
+workfolder/
+env.txt
+
+# Next.js
+apps/web/.next/
+apps/web/out/
+apps/web/node_modules/
+apps/web/.env*
+!apps/web/.env.example
+
+# Python
+backend/.pytest_cache/
+backend/.mypy_cache/

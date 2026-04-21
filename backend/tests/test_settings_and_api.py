@@ -1,0 +1,51 @@
+from __future__ import annotations
+
+from fastapi.testclient import TestClient
+
+from backend.app import database
+from backend.app import main
+
+
+def configure_tmp_runtime(monkeypatch, tmp_path):
+    monkeypatch.setattr(database, "DB_PATH", tmp_path / "test.sqlite")
+    monkeypatch.setattr(main, "YOUTUBE_COOKIE_PATH", tmp_path / "cookies" / "youtube.txt")
+    database.init_db()
+
+
+def test_openai_key_is_masked(monkeypatch, tmp_path):
+    configure_tmp_runtime(monkeypatch, tmp_path)
+    database.save_openai_settings("https://example.com/v1", "sk-test-secret", "test-model")
+    client = TestClient(main.app)
+
+    response = client.get("/api/settings/openai")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["api_key"] == "sk-t...cret"
+    assert body["has_api_key"] is True
+    assert "sk-test-secret" not in str(body)
+
+
+def test_cookie_response_does_not_leak_content(monkeypatch, tmp_path):
+    configure_tmp_runtime(monkeypatch, tmp_path)
+    client = TestClient(main.app)
+
+    response = client.post("/api/cookies/youtube", json={"content": "secret-cookie-content"})
+
+    assert response.status_code == 200
+    assert response.json()["content"] == ""
+    assert "secret-cookie-content" not in response.text
+
+
+def test_running_task_blocks_second_submit(monkeypatch, tmp_path):
+    configure_tmp_runtime(monkeypatch, tmp_path)
+    monkeypatch.setattr(main, "run_task", lambda task_id: None)
+    client = TestClient(main.app)
+    payload = {"url": "https://www.youtube.com/watch?v=abcdefghijk"}
+
+    first = client.post("/api/tasks", json=payload)
+    second = client.post("/api/tasks", json=payload)
+
+    assert first.status_code == 201
+    assert second.status_code == 409
+
