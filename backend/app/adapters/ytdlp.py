@@ -11,6 +11,14 @@ from ..sanitize import sanitize_text
 from ..youtube import extract_video_id
 
 
+FORMAT_CANDIDATES = (
+    "bestvideo[height<=1080]+bestaudio/best",
+    "bestvideo+bestaudio/best",
+    "bv*+ba/b",
+    "best",
+)
+
+
 def _proxy_url(proxy_port: str = "") -> str:
     if proxy_port.strip():
         return f"http://127.0.0.1:{proxy_port.strip()}"
@@ -38,6 +46,42 @@ def _session_path(workfolder: Path, info: dict[str, Any]) -> Path:
     return workfolder / uploader / f"{title}__{video_id}"
 
 
+def _is_format_unavailable(exc: Exception) -> bool:
+    return "Requested format is not available" in str(exc)
+
+
+def _remove_partial_outputs(video_file: Path) -> None:
+    for candidate in video_file.parent.glob(f"{video_file.name}*"):
+        if candidate == video_file:
+            continue
+        if candidate.is_file():
+            candidate.unlink(missing_ok=True)
+
+
+def _download_with_format_candidates(url: str, video_file: Path, cookie_path: Path, proxy_port: str) -> None:
+    last_error: Exception | None = None
+    for format_selector in FORMAT_CANDIDATES:
+        download_opts = {
+            **_ydl_base(cookie_path, proxy_port),
+            "format": format_selector,
+            "merge_output_format": "mp4",
+            "outtmpl": str(video_file),
+            "retries": 10,
+            "fragment_retries": 10,
+        }
+        try:
+            with yt_dlp.YoutubeDL(download_opts) as ydl:
+                ydl.download([url])
+            return
+        except Exception as exc:
+            last_error = exc
+            _remove_partial_outputs(video_file)
+            if not _is_format_unavailable(exc):
+                continue
+    if last_error:
+        raise last_error
+
+
 def download_youtube(url: str, workfolder: Path, cookie_path: Path, proxy_port: str = "") -> tuple[Path, dict[str, Any]]:
     video_id = extract_video_id(url)
     info_opts = _ydl_base(cookie_path, proxy_port)
@@ -60,16 +104,7 @@ def download_youtube(url: str, workfolder: Path, cookie_path: Path, proxy_port: 
     if video_file.exists() and video_file.stat().st_size > 0:
         return session, info
 
-    download_opts = {
-        **_ydl_base(cookie_path, proxy_port),
-        "format": "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
-        "merge_output_format": "mp4",
-        "outtmpl": str(video_file),
-        "retries": 3,
-        "fragment_retries": 3,
-    }
-    with yt_dlp.YoutubeDL(download_opts) as ydl:
-        ydl.download([url])
+    _download_with_format_candidates(url, video_file, cookie_path, proxy_port)
 
     if not video_file.exists() or video_file.stat().st_size == 0:
         raise RuntimeError("yt-dlp finished without producing media/video_source.mp4")
