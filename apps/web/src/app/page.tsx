@@ -171,66 +171,68 @@ export default function Home() {
               <Settings className="size-4" />
               Settings
             </DialogTrigger>
-            <DialogContent className="sm:max-w-2xl">
-              <form onSubmit={submitSettings} className="space-y-4">
-                <DialogHeader>
+            <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-hidden sm:max-w-2xl">
+              <form onSubmit={submitSettings} className="flex max-h-[calc(100dvh-4rem)] min-h-0 flex-col">
+                <DialogHeader className="shrink-0 pr-8">
                   <DialogTitle>Runtime settings</DialogTitle>
                   <DialogDescription>
                     Stored locally by the FastAPI backend.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="grid gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="cookie">YouTube cookie</Label>
-                    <Textarea
-                      id="cookie"
-                      value={settings.cookie}
-                      onChange={(event) =>
-                        setSettings((current) => ({ ...current, cookie: event.target.value }))
-                      }
-                      placeholder="Paste Netscape cookie content"
-                      className="min-h-36 font-mono text-xs"
-                    />
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-[1fr_160px]">
+                <div className="mt-4 min-h-0 overflow-y-auto pr-1">
+                  <div className="grid gap-4 pb-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="baseUrl">OpenAI base URL</Label>
-                      <Input
-                        id="baseUrl"
-                        value={settings.baseUrl}
+                      <Label htmlFor="cookie">YouTube cookie</Label>
+                      <Textarea
+                        id="cookie"
+                        value={settings.cookie}
                         onChange={(event) =>
-                          setSettings((current) => ({ ...current, baseUrl: event.target.value }))
+                          setSettings((current) => ({ ...current, cookie: event.target.value }))
                         }
+                        placeholder="Paste Netscape cookie content"
+                        className="min-h-44 max-h-[42dvh] overflow-auto font-mono text-xs leading-relaxed"
                       />
                     </div>
+                    <div className="grid gap-2 sm:grid-cols-[1fr_160px]">
+                      <div className="grid gap-2">
+                        <Label htmlFor="baseUrl">OpenAI base URL</Label>
+                        <Input
+                          id="baseUrl"
+                          value={settings.baseUrl}
+                          onChange={(event) =>
+                            setSettings((current) => ({ ...current, baseUrl: event.target.value }))
+                          }
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="model">Model</Label>
+                        <Input
+                          id="model"
+                          value={settings.model}
+                          onChange={(event) =>
+                            setSettings((current) => ({ ...current, model: event.target.value }))
+                          }
+                        />
+                      </div>
+                    </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="model">Model</Label>
+                      <Label htmlFor="apiKey">OpenAI API key</Label>
                       <Input
-                        id="model"
-                        value={settings.model}
+                        id="apiKey"
+                        type="password"
+                        value={settings.apiKey}
                         onChange={(event) =>
-                          setSettings((current) => ({ ...current, model: event.target.value }))
+                          setSettings((current) => ({ ...current, apiKey: event.target.value }))
                         }
+                        placeholder="Leave blank to keep existing key"
                       />
                     </div>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="apiKey">OpenAI API key</Label>
-                    <Input
-                      id="apiKey"
-                      type="password"
-                      value={settings.apiKey}
-                      onChange={(event) =>
-                        setSettings((current) => ({ ...current, apiKey: event.target.value }))
-                      }
-                      placeholder="Leave blank to keep existing key"
-                    />
+                    {settingsMessage ? (
+                      <p className="text-sm text-muted-foreground">{settingsMessage}</p>
+                    ) : null}
                   </div>
                 </div>
-                {settingsMessage ? (
-                  <p className="text-sm text-muted-foreground">{settingsMessage}</p>
-                ) : null}
-                <DialogFooter>
+                <DialogFooter className="shrink-0">
                   <Button type="submit">Save settings</Button>
                 </DialogFooter>
               </form>
