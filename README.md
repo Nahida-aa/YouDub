@@ -1,145 +1,89 @@
 # YouDub WebUI
 
-YouDub WebUI is a minimal local YouTube-to-Chinese-dubbing console. The current project is a single repository containing a Next.js frontend and a FastAPI backend. It is intentionally small: one page, one active task, one serial media pipeline, local SQLite state, and local filesystem artifacts.
+最简本地 YouTube 中文配音控制台。同一个仓库里包含 Next.js 前端和 FastAPI 后端，使用 SQLite 和本地文件保存运行状态与产物。当前版本只支持单个活动任务，所有阶段串行执行。
 
-## What It Does
+英文版见 [README.en.md](README.en.md)。
 
-The app takes one YouTube video URL and runs these stages in order:
+## 快速说明
 
-1. `download`: download one YouTube video with yt-dlp.
-2. `separate`: split vocals and background music with Demucs.
-3. `asr`: recognize speech with FunASR / SenseVoice.
-4. `translate`: translate each utterance independently through an OpenAI-compatible Chat API.
-5. `split_audio`: cut vocal reference segments from the original vocal track.
-6. `tts`: generate Chinese dubbing with VoxCPM2.
-7. `merge_audio`: align generated speech onto the original timeline.
-8. `merge_video`: mix background music, dubbing, subtitles, and source video with FFmpeg.
+输入一个 YouTube 视频 URL 后，系统按固定顺序执行：
 
-There is no Redis, Postgres, worker queue, playlist monitor, Bilibili upload, cover editor, or concurrent execution in this MVP.
+1. `download`：yt-dlp 下载视频。
+2. `separate`：Demucs 分离人声和背景音。
+3. `asr`：FunASR / SenseVoice 识别语音。
+4. `translate`：OpenAI 兼容 Chat API 逐句翻译为简体中文。
+5. `split_audio`：按翻译片段切出人声参考音频。
+6. `tts`：VoxCPM2 生成中文配音。
+7. `merge_audio`：把配音拼回原时间轴。
+8. `merge_video`：FFmpeg 合成最终视频和字幕。
 
-## Current Stack
+这个 MVP 不包含 Redis、Postgres、多 worker、并行队列、播放列表/频道监控、B 站上传、封面编辑或多用户系统。
 
-- Frontend: Next.js App Router, shadcn/ui-style components, Lucide icons, light mode only.
-- Backend: FastAPI, SQLite, local file storage.
-- Download: yt-dlp with YouTube cookies, optional local proxy port, Node-based EJS challenge solving.
-- Separation: Demucs source checkout as a git submodule.
-- ASR: FunASR `iic/SenseVoiceSmall` with `fsmn-vad`.
-- Translation: OpenAI-compatible Chat Completions API, one request per utterance.
-- TTS: VoxCPM2 from ModelScope.
-- Media: FFmpeg / ffprobe.
-- Runtime target used during development: `gil-gpu:/data1/liuzhao/YouDub-webui`, GPU1 via `CUDA_VISIBLE_DEVICES=1`.
+## 安装准备
 
-## Repository Layout
+建议环境：
 
-```text
-apps/web/                 Next.js frontend
-apps/web/src/app/         Single-page console and app styles
-apps/web/src/components/  shadcn/ui-style primitives
-apps/web/src/lib/api.ts   Frontend API client
-backend/app/              FastAPI app, SQLite repository, pipeline runner
-backend/app/adapters/     yt-dlp, Demucs, FunASR, OpenAI, VoxCPM, FFmpeg adapters
-backend/tests/            Backend unit and integration-style tests
-data/                     Runtime DB, logs, cookies; ignored by git
-workfolder/               Per-video task artifacts; ignored by git
-submodule/demucs/         Demucs source submodule
-env.txt.example           Runtime environment template
-requirements.txt          Python dependencies
+- Python 3.12
+- Node.js 20+ 和 npm
+- FFmpeg / ffprobe
+- Git submodule 支持
+- CUDA GPU，远端测试使用 GPU1
+- 可用的 YouTube 代理，例如本地 `127.0.0.1:20171`
+- 有效的 Netscape 格式 YouTube cookie
+- OpenAI 兼容 API 的 base URL、API key 和 model
+
+安装源规则：
+
+- Python 包默认优先使用 Aliyun：`https://mirrors.aliyun.com/pypi/simple/`
+- npm 默认使用 npmmirror：`https://registry.npmmirror.com`
+- 不要把 Tsinghua 配成 `--extra-index-url`，pip 可能从备用源选包。
+- Aliyun 某个包失败时，再单独用 Tsinghua 重试那个包。
+
+## 本地安装
+
+克隆仓库：
+
+```bash
+cd /Users/liuzhao/code
+git clone git@github.com:liuzhao1225/YouDub-webui.git
+cd YouDub-webui
 ```
 
-## Runtime Data
+创建 Python 虚拟环境并安装后端依赖：
 
-Runtime state is intentionally stored locally:
-
-- `data/youdub.sqlite`: SQLite database.
-- `data/cookies/youtube.txt`: Netscape-format YouTube cookie file.
-- `data/logs/{task_id}.log`: task logs.
-- `workfolder/{uploader_slug}/{title_slug}__{video_id}/`: task session directory.
-
-These paths are ignored by git and should not be committed.
-
-## Artifacts
-
-Each task writes a session like:
-
-```text
-workfolder/{uploader_slug}/{title_slug}__{video_id}/
+```bash
+python3.12 -m venv .venv
+.venv/bin/pip install -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
 ```
 
-Important files:
+如果 Aliyun 某个包失败，只对那个包使用 Tsinghua：
 
-```text
-media/video_source.mp4
-media/audio_vocals.wav
-media/audio_bgm.wav
-metadata/ytdlp_info.json
-metadata/asr.json
-metadata/translation.zh.json
-metadata/subtitles.zh.srt
-segments/vocals/*.wav
-segments/tts/*.wav
-tmp/audio_dubbing.wav
-media/video_final.mp4
+```bash
+.venv/bin/pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ <package-name>
 ```
 
-## API
+初始化 Demucs 源码子模块：
 
-Task endpoints:
+```bash
+git submodule update --init --recursive
+```
 
-- `POST /api/tasks`: submit a single YouTube URL. Returns `409` if a task is queued or running.
-- `GET /api/tasks/current`: current or most recent task.
-- `GET /api/tasks/{id}`: task details and stage statuses.
-- `GET /api/tasks/{id}/log`: task log text.
-- `GET /api/tasks/{id}/artifact/final-video`: final video download.
+安装前端依赖：
 
-Settings endpoints:
+```bash
+npm --prefix apps/web install --registry=https://registry.npmmirror.com
+```
 
-- `GET /api/cookies/youtube`: returns cookie metadata only. Cookie content is never returned.
-- `POST /api/cookies/youtube`: saves Netscape cookie content to `data/cookies/youtube.txt`.
-- `GET /api/settings/openai`: returns base URL, model, `has_api_key`, and a masked API key.
-- `POST /api/settings/openai`: saves OpenAI base URL, API key, and model.
-- `POST /api/settings/openai/models`: fetches model IDs from the configured OpenAI-compatible `/models` API.
-- `GET /api/settings/ytdlp`: returns the yt-dlp proxy port.
-- `POST /api/settings/ytdlp`: saves the yt-dlp proxy port.
-
-Utility:
-
-- `GET /api/health`: basic health check.
-
-## Frontend Behavior
-
-The frontend is one vertical page:
-
-1. Convert video card.
-2. Progress card.
-3. Task log card.
-
-Settings are in a modal:
-
-- YouTube cookie textarea.
-- yt-dlp proxy port input.
-- OpenAI base URL.
-- OpenAI API key with show/hide button.
-- Model input or model select after clicking `Get models`.
-
-Sensitive values are masked in the UI:
-
-- Saved API key appears as `********`.
-- Saved YouTube cookie appears as a placeholder instead of being returned from the backend.
-- Saving without editing a masked value keeps the existing secret.
-
-The frontend polls `GET /api/tasks/current` every 2 seconds. There is no SSE or WebSocket.
-
-## Environment
-
-The app reads runtime values from `.env`. Codex should not read or edit `.env` directly. Use `env.txt` for editable local notes and copy values into `.env` when needed.
-
-Template:
+准备运行环境变量：
 
 ```bash
 cp env.txt.example env.txt
+cp env.txt.example .env
 ```
 
-Important variables:
+Codex 不直接读取或编辑 `.env`。需要调整环境变量时，优先编辑 `env.txt`，确认后再把值同步到 `.env`。应用代码仍然从 `.env` 读取运行配置。
+
+常用环境变量：
 
 ```text
 WORKFOLDER=./workfolder
@@ -156,125 +100,38 @@ VOXCPM_MODEL_DIR=
 HTTP_PROXY=
 ```
 
-`YTDLP_PROXY_PORT` and the UI setting are ports only, for example `20171`. The backend converts that to `http://127.0.0.1:20171` for yt-dlp. If no proxy port is configured, yt-dlp can still use `HTTP_PROXY` / `http_proxy`.
+`YTDLP_PROXY_PORT` 只填端口，例如 `20171`。后端会转换为 `http://127.0.0.1:20171` 给 yt-dlp 使用。不配置端口时，yt-dlp 仍可 fallback 到 `HTTP_PROXY` / `http_proxy`。
 
-## Install
+## 本地启动
 
-Use Aliyun first. Do not configure Tsinghua as `--extra-index-url`; pip can choose packages from the fallback index even when Aliyun has them. If Aliyun fails for a specific package, retry that package separately with Tsinghua.
-
-```bash
-cd /Users/liuzhao/code/YouDub-webui
-python3.12 -m venv .venv
-.venv/bin/pip install -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
-git submodule update --init --recursive
-npm --prefix apps/web install --registry=https://registry.npmmirror.com
-```
-
-Tsinghua fallback for one failed package:
-
-```bash
-.venv/bin/pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ <package-name>
-```
-
-## Demucs
-
-Demucs is intentionally used as a source submodule:
-
-```text
-submodule/demucs
-```
-
-The app imports `demucs.api.Separator`. The published PyPI package is not used for this import path because the required API is available from the source tree. Keep the submodule initialized before running the pipeline.
-
-## yt-dlp Notes
-
-The download adapter mirrors the working `youdub-backend` format strategy first:
-
-```text
-bestvideo[height<=1080]+bestaudio/best
-```
-
-It then falls back through wider selectors:
-
-```text
-bestvideo+bestaudio/best
-bv*+ba/b
-best
-```
-
-The project depends on `yt-dlp[default]`, which installs `yt-dlp-ejs`. The adapter also enables Node as the JavaScript runtime:
-
-```python
-js_runtimes={"node": {}}
-```
-
-This is needed for YouTube n-challenge solving. Node must be installed and available in `PATH`.
-
-YouTube may still reject downloads when:
-
-- the proxy IP is rate limited or challenged with HTTP 429;
-- the cookie file is stale or incomplete;
-- the browser rotated the account cookies after export.
-
-When this happens, export a fresh Netscape-format cookie file from a logged-in YouTube browser session and paste it into Settings.
-
-## Models
-
-Model downloads should use ModelScope where possible.
-
-Defaults:
-
-- FunASR model: `iic/SenseVoiceSmall`
-- FunASR VAD: `fsmn-vad`
-- VoxCPM model: `OpenBMB/VoxCPM2`
-
-VoxCPM2 is downloaded through `modelscope.snapshot_download`. Use `MODEL_CACHE_DIR` to place model caches on a large disk, for example:
-
-```text
-/data1/liuzhao/modelscope_cache
-```
-
-Known remote cache paths from the development machine:
-
-```text
-/data1/liuzhao/modelscope_cache/OpenBMB__VoxCPM2
-/data1/liuzhao/modelscope_cache/models/iic/SenseVoiceSmall
-/data1/liuzhao/modelscope_cache/models/iic/speech_fsmn_vad_zh-cn-16k-common-pytorch
-/data1/liuzhao/torch_cache/hub/checkpoints
-```
-
-Demucs weights are downloaded by the upstream Demucs source code into the PyTorch hub cache.
-
-## Run Locally
-
-Backend:
+启动后端：
 
 ```bash
 .venv/bin/uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Frontend:
+启动前端开发服务：
 
 ```bash
 npm --prefix apps/web run dev -- --hostname 0.0.0.0 --port 3000
 ```
 
-Open:
+打开：
 
 ```text
 http://localhost:3000
 ```
 
-If the frontend is built for production, set `NEXT_PUBLIC_API_BASE_URL` at build time:
+前端生产构建需要在构建时指定 API 地址，因为 `NEXT_PUBLIC_API_BASE_URL` 会被编译进浏览器代码：
 
 ```bash
-NEXT_PUBLIC_API_BASE_URL=http://172.27.2.90:8000 npm --prefix apps/web run build
+NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000 npm --prefix apps/web run build
 npm --prefix apps/web run start -- --hostname 0.0.0.0 --port 3000
 ```
 
-## Remote GPU Runbook
+## 远端 GPU 部署
 
-The development deployment currently uses:
+开发和测试使用的远端部署信息：
 
 ```text
 Host: gil-gpu
@@ -282,12 +139,37 @@ Path: /data1/liuzhao/YouDub-webui
 GPU: CUDA_VISIBLE_DEVICES=1
 Web: http://172.27.2.90:3000
 API: http://172.27.2.90:8000
-tmux sessions: youdub-api, youdub-web
+tmux: youdub-api, youdub-web
+Proxy: 127.0.0.1:20171
 ```
 
-Start backend:
+拉取代码并安装依赖：
 
 ```bash
+ssh gil-gpu
+cd /data1/liuzhao
+git clone git@github.com:liuzhao1225/YouDub-webui.git
+cd YouDub-webui
+git submodule update --init --recursive
+python3.12 -m venv .venv
+.venv/bin/pip install -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
+npm --prefix apps/web install --registry=https://registry.npmmirror.com
+```
+
+建议把模型和 torch cache 放到大盘：
+
+```bash
+export CUDA_VISIBLE_DEVICES=1
+export DEVICE=cuda
+export MODEL_CACHE_DIR=/data1/liuzhao/modelscope_cache
+export MODELSCOPE_CACHE=/data1/liuzhao/modelscope_cache
+export TORCH_HOME=/data1/liuzhao/torch_cache
+```
+
+启动后端：
+
+```bash
+tmux kill-session -t youdub-api 2>/dev/null || true
 tmux new-session -d -s youdub-api "\
 cd /data1/liuzhao/YouDub-webui && \
 export CUDA_VISIBLE_DEVICES=1 DEVICE=cuda \
@@ -298,67 +180,238 @@ CORS_ALLOW_ORIGINS=http://172.27.2.90:3000,http://100.94.222.54:3000 && \
 .venv/bin/uvicorn backend.app.main:app --host 0.0.0.0 --port 8000"
 ```
 
-Start frontend:
+构建并启动前端：
 
 ```bash
 NEXT_PUBLIC_API_BASE_URL=http://172.27.2.90:8000 npm --prefix apps/web run build
+tmux kill-session -t youdub-web 2>/dev/null || true
 tmux new-session -d -s youdub-web "\
 cd /data1/liuzhao/YouDub-webui && \
 NEXT_PUBLIC_API_BASE_URL=http://172.27.2.90:8000 \
 npm --prefix apps/web run start -- --hostname 0.0.0.0 --port 3000"
 ```
 
-Check status:
+检查服务：
 
 ```bash
 curl -sS http://127.0.0.1:8000/api/health
 curl -I http://127.0.0.1:3000
 tmux ls
+ss -ltnp | grep -E ":(3000|8000) "
 ```
 
-## Tests
+如果要用 Tailscale IP 访问前端，需要用对应 API IP 重新构建：
 
-Backend:
+```bash
+NEXT_PUBLIC_API_BASE_URL=http://100.94.222.54:8000 npm --prefix apps/web run build
+```
+
+## 首次使用
+
+1. 打开 Web 页面。
+2. 点击 `Settings`。
+3. 粘贴 Netscape 格式 YouTube cookie。
+4. 设置 `yt-dlp proxy port`，例如 `20171`。
+5. 设置 OpenAI base URL、API key 和 model。
+6. 可点击 `Get models` 从 OpenAI 兼容 API 拉取模型列表。
+7. 保存设置。
+8. 在主界面输入 YouTube URL 并开始转换。
+
+敏感信息显示规则：
+
+- 已保存 API key 显示为 `********`。
+- 已保存 YouTube cookie 显示为占位文本，不会从后端返回明文。
+- 如果没有编辑 mask，占位值不会覆盖真实 secret。
+
+## 项目结构
+
+```text
+apps/web/                 Next.js 前端
+apps/web/src/app/         单页控制台和全局样式
+apps/web/src/components/  shadcn/ui 风格组件
+apps/web/src/lib/api.ts   前端 API client
+backend/app/              FastAPI、SQLite repository、pipeline runner
+backend/app/adapters/     yt-dlp、Demucs、FunASR、OpenAI、VoxCPM、FFmpeg 适配器
+backend/tests/            后端测试
+data/                     SQLite、cookies、logs，git 忽略
+workfolder/               视频任务产物，git 忽略
+submodule/demucs/         Demucs 源码子模块
+env.txt.example           环境变量模板
+requirements.txt          Python 依赖
+```
+
+## 前端
+
+前端是单页竖向布局：
+
+1. `Convert video`
+2. `Progress`
+3. `Task log`
+
+主题为亮色，使用 YouTube 红、B 站蓝、B 站粉。任务进度通过每 2 秒轮询 `GET /api/tasks/current` 获取，不使用 SSE 或 WebSocket。
+
+## 后端 API
+
+任务接口：
+
+- `POST /api/tasks`：提交单个 YouTube URL；已有任务运行时返回 `409`。
+- `GET /api/tasks/current`：当前或最近任务。
+- `GET /api/tasks/{id}`：任务详情和阶段状态。
+- `GET /api/tasks/{id}/log`：任务日志文本。
+- `GET /api/tasks/{id}/artifact/final-video`：下载最终视频。
+
+设置接口：
+
+- `GET /api/cookies/youtube`：返回 cookie 元信息，不返回 cookie 内容。
+- `POST /api/cookies/youtube`：保存 Netscape 格式 YouTube cookie。
+- `GET /api/settings/openai`：读取 OpenAI base URL、model、`has_api_key` 和脱敏 API key。
+- `POST /api/settings/openai`：保存 OpenAI base URL、API key 和 model。
+- `POST /api/settings/openai/models`：从 OpenAI 兼容 `/models` 接口拉取模型 ID。
+- `GET /api/settings/ytdlp`：读取 yt-dlp proxy port。
+- `POST /api/settings/ytdlp`：保存 yt-dlp proxy port。
+- `GET /api/health`：健康检查。
+
+## 运行数据和产物
+
+运行状态保存在本地：
+
+- `data/youdub.sqlite`：SQLite 数据库。
+- `data/cookies/youtube.txt`：Netscape 格式 YouTube cookie。
+- `data/logs/{task_id}.log`：任务日志。
+- `workfolder/{uploader_slug}/{title_slug}__{video_id}/`：任务工作目录。
+
+关键产物：
+
+```text
+media/video_source.mp4
+media/audio_vocals.wav
+media/audio_bgm.wav
+metadata/ytdlp_info.json
+metadata/asr.json
+metadata/translation.zh.json
+metadata/subtitles.zh.srt
+segments/vocals/*.wav
+segments/tts/*.wav
+tmp/audio_dubbing.wav
+media/video_final.mp4
+```
+
+## Demucs
+
+Demucs 必须作为源码子模块使用：
+
+```text
+submodule/demucs
+```
+
+当前代码导入 `demucs.api.Separator`。PyPI 发布版不作为主要来源，因为需要的 API 来自源码树。运行前必须执行：
+
+```bash
+git submodule update --init --recursive
+```
+
+## yt-dlp
+
+下载格式优先对齐旧 `youdub-backend`：
+
+```text
+bestvideo[height<=1080]+bestaudio/best
+```
+
+失败后依次回退：
+
+```text
+bestvideo+bestaudio/best
+bv*+ba/b
+best
+```
+
+项目依赖 `yt-dlp[default]`，会安装 `yt-dlp-ejs`。后端 adapter 也启用 Node JavaScript runtime：
+
+```python
+js_runtimes={"node": {}}
+```
+
+这用于解决 YouTube n-challenge。远端必须能在 `PATH` 中找到 `node`。
+
+常见下载失败原因：
+
+- 代理 IP 被 YouTube 429 限流。
+- cookie 过期、缺字段或被浏览器轮换。
+- YouTube 要求登录确认不是 bot。
+
+遇到 `cookies are no longer valid` 或 `Sign in to confirm you're not a bot` 时，需要重新从已登录 YouTube 的浏览器导出 Netscape cookie 并在 Settings 中保存。
+
+## 模型
+
+默认模型：
+
+- FunASR：`iic/SenseVoiceSmall`
+- FunASR VAD：`fsmn-vad`
+- VoxCPM：`OpenBMB/VoxCPM2`
+
+模型下载优先用 ModelScope。VoxCPM2 通过 `modelscope.snapshot_download` 下载。建议设置：
+
+```text
+MODEL_CACHE_DIR=/data1/liuzhao/modelscope_cache
+MODELSCOPE_CACHE=/data1/liuzhao/modelscope_cache
+TORCH_HOME=/data1/liuzhao/torch_cache
+```
+
+已验证过的远端缓存路径：
+
+```text
+/data1/liuzhao/modelscope_cache/OpenBMB__VoxCPM2
+/data1/liuzhao/modelscope_cache/models/iic/SenseVoiceSmall
+/data1/liuzhao/modelscope_cache/models/iic/speech_fsmn_vad_zh-cn-16k-common-pytorch
+/data1/liuzhao/torch_cache/hub/checkpoints
+```
+
+Demucs 权重由上游 Demucs 代码下载到 PyTorch hub cache。
+
+## 测试
+
+后端：
 
 ```bash
 .venv/bin/pytest backend/tests
 ```
 
-Frontend:
+前端：
 
 ```bash
 npm --prefix apps/web run lint
 npm --prefix apps/web run build
 ```
 
-Current backend coverage includes:
+当前测试覆盖：
 
-- YouTube URL validation.
-- Cookie and API key masking.
-- OpenAI model listing endpoint.
-- yt-dlp proxy port validation.
-- yt-dlp format selector order and Node EJS runtime setting.
-- fixed serial stage status progression.
-- mocked full pipeline success and failure behavior.
-- translation one-request-per-utterance behavior.
-- FFmpeg helper behavior.
+- YouTube URL 校验。
+- cookie 和 API key 脱敏。
+- OpenAI models 接口。
+- yt-dlp proxy port 校验。
+- yt-dlp 格式选择顺序和 Node EJS runtime。
+- 固定串行阶段状态推进。
+- mock 完整 pipeline 成功和失败。
+- 逐句翻译请求行为。
+- FFmpeg helper 行为。
 
-## Current Limitations
+## 当前限制
 
-- Only one active task is supported.
-- No task cancel endpoint yet.
-- No task deletion or cleanup UI yet.
-- No playlist/channel monitoring.
-- No Bilibili upload.
-- No user accounts or multi-user security model.
-- YouTube cookie content is stored locally in plaintext.
-- OpenAI API key is stored locally in plaintext.
-- The UI shows progress by polling, not streaming logs.
+- 同一时间只支持一个活动任务。
+- 暂无任务取消接口。
+- 暂无任务删除和清理 UI。
+- 暂无播放列表/频道监控。
+- 暂无 B 站上传。
+- 暂无用户系统或多用户安全模型。
+- YouTube cookie 明文保存在本地。
+- OpenAI API key 明文保存在本地。
+- 前端轮询进度，不流式显示真实日志。
 
-## Operational Notes
+## 运维注意事项
 
-- Keep `.env`, `data/`, `workfolder/`, model caches, downloaded videos, and cookies out of git.
-- Re-export YouTube cookies when yt-dlp reports `cookies are no longer valid` or `Sign in to confirm you're not a bot`.
-- Keep proxy port configured when the server needs v2rayA or another local proxy.
-- If using Tailscale IP for the frontend, rebuild the frontend with `NEXT_PUBLIC_API_BASE_URL` pointing to the matching API IP.
-- For dependency installs, Aliyun is the primary source; Tsinghua is manual fallback only.
+- 不要提交 `.env`、`data/`、`workfolder/`、模型缓存、下载视频和 cookie。
+- YouTube cookie 失效时重新导出。
+- 服务器需要代理时，在 Settings 里设置 proxy port。
+- 前端生产构建时确认 `NEXT_PUBLIC_API_BASE_URL` 指向用户实际能访问的 API 地址。
+- 依赖安装优先 Aliyun；Tsinghua 只作为单包手动 fallback。
