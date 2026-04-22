@@ -104,7 +104,18 @@ class PipelineRunner:
         database.update_stage(self.task_id, stage, last_message=message)
         self.log(f"[{stage}] {message}")
 
+    def _stage_status(self, stage: str) -> str | None:
+        task = database.get_task(self.task_id)
+        for entry in task["stages"] if task else []:
+            if entry["name"] == stage:
+                return entry["status"]
+        return None
+
     def _run_stage(self, stage: str) -> None:
+        if self._stage_status(stage) == "succeeded":
+            self._stage_handlers[stage](database.get_task(self.task_id))
+            self.log(f"[{stage}] Reused cached output")
+            return
         database.update_task(self.task_id, current_stage=stage)
         database.update_stage(
             self.task_id,

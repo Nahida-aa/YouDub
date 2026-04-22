@@ -35,6 +35,7 @@ class OpenAISettingsUpdate(BaseModel):
     base_url: str
     api_key: str = ""
     model: str
+    translate_concurrency: str = ""
 
 
 class OpenAIModelsRequest(BaseModel):
@@ -173,6 +174,18 @@ def rerun_task(task_id: str) -> dict:
     return database.get_task(new_id)
 
 
+@app.post("/api/tasks/{task_id}/resume")
+def resume_task(task_id: str) -> dict:
+    task = database.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found.")
+    if task["status"] != "failed":
+        raise HTTPException(status_code=409, detail="Only failed tasks can be resumed.")
+    database.reset_failed_for_resume(task_id)
+    worker.enqueue(task_id)
+    return database.get_task(task_id)
+
+
 @app.get("/api/tasks/{task_id}/log", response_class=PlainTextResponse)
 def task_log(task_id: str) -> str:
     task = database.get_task(task_id)
@@ -224,12 +237,15 @@ def get_openai_settings() -> dict:
         "api_key": mask_secret(settings["api_key"]),
         "has_api_key": bool(settings["api_key"]),
         "model": settings["model"],
+        "translate_concurrency": settings["translate_concurrency"],
     }
 
 
 @app.post("/api/settings/openai")
 def save_openai_settings(payload: OpenAISettingsUpdate) -> dict:
-    database.save_openai_settings(payload.base_url, payload.api_key, payload.model)
+    database.save_openai_settings(
+        payload.base_url, payload.api_key, payload.model, payload.translate_concurrency
+    )
     return get_openai_settings()
 
 

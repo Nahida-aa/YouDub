@@ -222,6 +222,28 @@ def delete_task(task_id: str) -> bool:
         return cursor.rowcount > 0
 
 
+def reset_failed_for_resume(task_id: str) -> None:
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE task_stages
+            SET status = 'pending', started_at = NULL, completed_at = NULL,
+                last_message = NULL, error_message = NULL
+            WHERE task_id = ? AND status IN ('failed', 'running')
+            """,
+            (task_id,),
+        )
+        conn.execute(
+            """
+            UPDATE tasks
+            SET status = 'queued', error_message = NULL, completed_at = NULL,
+                started_at = NULL
+            WHERE id = ?
+            """,
+            (task_id,),
+        )
+
+
 def update_task(task_id: str, **fields: Any) -> None:
     if not fields:
         return
@@ -264,15 +286,22 @@ def get_openai_settings() -> dict[str, str]:
         "base_url": get_setting("openai.base_url", defaults["base_url"]),
         "api_key": get_setting("openai.api_key", defaults["api_key"]),
         "model": get_setting("openai.model", defaults["model"]),
+        "translate_concurrency": get_setting(
+            "openai.translate_concurrency", defaults["translate_concurrency"]
+        ),
     }
 
 
-def save_openai_settings(base_url: str, api_key: str, model: str) -> None:
+def save_openai_settings(
+    base_url: str, api_key: str, model: str, translate_concurrency: str = ""
+) -> None:
     set_setting("openai.base_url", base_url.strip())
     cleaned_api_key = api_key.strip()
     if cleaned_api_key and set(cleaned_api_key) != {"*"}:
         set_setting("openai.api_key", cleaned_api_key)
     set_setting("openai.model", model.strip())
+    if translate_concurrency.strip():
+        set_setting("openai.translate_concurrency", translate_concurrency.strip())
 
 
 def get_ytdlp_settings() -> dict[str, str]:

@@ -38,6 +38,7 @@ type SettingsForm = {
   baseUrl: string
   apiKey: string
   model: string
+  translateConcurrency: string
   proxyPort: string
 }
 
@@ -49,6 +50,7 @@ const defaultSettings: SettingsForm = {
   baseUrl: "https://api.openai.com/v1",
   apiKey: "",
   model: "gpt-4o-mini",
+  translateConcurrency: "50",
   proxyPort: "",
 }
 
@@ -76,6 +78,7 @@ export function SettingsDialog() {
           baseUrl: openai.base_url,
           apiKey: openai.has_api_key ? openai.api_key || SAVED_API_KEY_MASK : "",
           model: openai.model,
+          translateConcurrency: openai.translate_concurrency || "50",
           proxyPort: ytdlp.proxy_port,
         })
         setModelOptions(uniqueModels([openai.model]))
@@ -97,6 +100,7 @@ export function SettingsDialog() {
         base_url: settings.baseUrl,
         api_key: apiKeyDirty ? settings.apiKey : "",
         model: settings.model,
+        translate_concurrency: settings.translateConcurrency,
       })
       const ytdlp = await saveYtdlpSettings({ proxy_port: settings.proxyPort })
       setMessage("Settings saved.")
@@ -104,6 +108,7 @@ export function SettingsDialog() {
         ...current,
         apiKey: openai.has_api_key ? openai.api_key || SAVED_API_KEY_MASK : "",
         cookie: cookieDirty ? (cookie?.exists ? SAVED_COOKIE_MASK : "") : current.cookie,
+        translateConcurrency: openai.translate_concurrency || current.translateConcurrency,
         proxyPort: ytdlp.proxy_port,
       }))
       setCookieDirty(false)
@@ -266,6 +271,24 @@ export function SettingsDialog() {
                     {modelsLoading ? "Loading" : "Get models"}
                   </Button>
                 </div>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="translateConcurrency">Translate concurrency</Label>
+                <Input
+                  id="translateConcurrency"
+                  inputMode="numeric"
+                  value={settings.translateConcurrency}
+                  onChange={(event) =>
+                    setSettings((current) => ({
+                      ...current,
+                      translateConcurrency: event.target.value.replace(/[^0-9]/g, ""),
+                    }))
+                  }
+                  placeholder="50"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Parallel OpenAI requests during the translate stage. Increase if your provider allows it.
+                </p>
               </div>
               {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
             </div>

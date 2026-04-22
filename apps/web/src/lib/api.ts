@@ -47,6 +47,7 @@ export type OpenAISettings = {
   api_key: string
   has_api_key: boolean
   model: string
+  translate_concurrency: string
 }
 
 export type OpenAIModels = {
@@ -117,6 +118,10 @@ export function rerunTask(taskId: string) {
   return request<Task>(`/api/tasks/${taskId}/rerun`, { method: "POST" })
 }
 
+export function resumeTask(taskId: string) {
+  return request<Task>(`/api/tasks/${taskId}/resume`, { method: "POST" })
+}
+
 export function createTask(url: string) {
   return request<Task>("/api/tasks", {
     method: "POST",
@@ -143,6 +148,7 @@ export function saveOpenAISettings(settings: {
   base_url: string
   api_key: string
   model: string
+  translate_concurrency: string
 }) {
   return request<OpenAISettings>("/api/settings/openai", {
     method: "POST",

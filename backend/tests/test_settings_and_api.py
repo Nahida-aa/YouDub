@@ -270,6 +270,70 @@ def test_openai_models_can_use_saved_key(monkeypatch, tmp_path):
     assert captured == {"base_url": "https://saved.example/v1", "api_key": "sk-saved"}
 
 
+def test_openai_settings_include_translate_concurrency(monkeypatch, tmp_path):
+    monkeypatch.delenv("OPENAI_TRANSLATE_CONCURRENCY", raising=False)
+    configure_tmp_runtime(monkeypatch, tmp_path)
+    client = TestClient(main.app)
+
+    response = client.get("/api/settings/openai")
+
+    assert response.status_code == 200
+    assert response.json()["translate_concurrency"] == "50"
+
+
+def test_openai_settings_persists_translate_concurrency(monkeypatch, tmp_path):
+    configure_tmp_runtime(monkeypatch, tmp_path)
+    client = TestClient(main.app)
+
+    response = client.post(
+        "/api/settings/openai",
+        json={
+            "base_url": "https://example.com/v1",
+            "api_key": "",
+            "model": "model",
+            "translate_concurrency": "32",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["translate_concurrency"] == "32"
+    assert database.get_openai_settings()["translate_concurrency"] == "32"
+
+
+def test_resume_task_requeues_failed_task(monkeypatch, tmp_path):
+    configure_tmp_runtime(monkeypatch, tmp_path)
+    enqueued: list[str] = []
+    monkeypatch.setattr(main.worker, "enqueue", lambda task_id: enqueued.append(task_id))
+    task_id = database.create_task("https://www.youtube.com/watch?v=resumevideox", task_id="resumevideox")
+    database.update_task(task_id, status="failed", error_message="boom", completed_at=database.now_iso())
+    database.update_stage(task_id, "asr", status="failed", error_message="boom")
+    database.update_stage(task_id, "download", status="succeeded")
+
+    client = TestClient(main.app)
+    response = client.post(f"/api/tasks/{task_id}/resume")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "queued"
+    assert body["error_message"] is None
+    stages = {s["name"]: s for s in body["stages"]}
+    assert stages["download"]["status"] == "succeeded"
+    assert stages["asr"]["status"] == "pending"
+    assert stages["asr"]["error_message"] is None
+    assert enqueued == [task_id]
+
+
+def test_resume_task_rejects_non_failed(monkeypatch, tmp_path):
+    configure_tmp_runtime(monkeypatch, tmp_path)
+    task_id = database.create_task("https://www.youtube.com/watch?v=okvideoxxxx", task_id="okvideoxxxx")
+    database.update_task(task_id, status="succeeded")
+
+    client = TestClient(main.app)
+    response = client.post(f"/api/tasks/{task_id}/resume")
+
+    assert response.status_code == 409
+
+
 def test_ytdlp_proxy_port_settings(monkeypatch, tmp_path):
     configure_tmp_runtime(monkeypatch, tmp_path)
     client = TestClient(main.app)

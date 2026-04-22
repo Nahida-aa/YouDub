@@ -8,6 +8,7 @@ import {
   Download,
   FileText,
   Loader2,
+  Play,
   RotateCw,
   Trash2,
   XCircle,
@@ -22,6 +23,7 @@ import {
   getTask,
   getTaskLog,
   rerunTask,
+  resumeTask,
 } from "@/lib/api"
 import { statusBadgeClass } from "@/lib/status"
 import { AppHeader } from "@/components/app-header"
@@ -84,6 +86,8 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
   const [rerunOpen, setRerunOpen] = useState(false)
   const [rerunning, setRerunning] = useState(false)
   const [rerunError, setRerunError] = useState("")
+  const [resuming, setResuming] = useState(false)
+  const [resumeError, setResumeError] = useState("")
 
   const handleDelete = async () => {
     setDeleting(true)
@@ -112,7 +116,21 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  const handleResume = async () => {
+    setResuming(true)
+    setResumeError("")
+    try {
+      const next = await resumeTask(id)
+      setTask(next)
+    } catch (err) {
+      setResumeError(err instanceof Error ? err.message : "Failed to resume task")
+    } finally {
+      setResuming(false)
+    }
+  }
+
   const isRunning = task?.status === "running"
+  const isFailed = task?.status === "failed"
 
   useEffect(() => {
     let cancelled = false
@@ -262,6 +280,22 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
             {task?.error_message ? (
               <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                 {task.error_message}
+              </div>
+            ) : null}
+            {isFailed ? (
+              <div className="mt-4 flex flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-amber-800">
+                  Resume from the failed stage. Already-succeeded stages will be reused from cache.
+                </p>
+                <Button onClick={handleResume} disabled={resuming}>
+                  {resuming ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
+                  {resuming ? "Resuming" : "Resume task"}
+                </Button>
+              </div>
+            ) : null}
+            {resumeError ? (
+              <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {resumeError}
               </div>
             ) : null}
           </CardContent>
