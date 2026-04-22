@@ -151,8 +151,12 @@ class PipelineRunner:
         vocals_file = _require(self.artifacts.vocals_file, "vocals_file")
         self.artifacts.asr_file = recognize_speech(vocals_file, session)
         data = _json.loads(self.artifacts.asr_file.read_text(encoding="utf-8"))
-        segments = data["result"]["utterances"]
-        self.stage_message("asr", f"Recognized {len(segments)} segments -> {self.artifacts.asr_file.name}")
+        utterances = data["result"]["utterances"]
+        word_count = sum(len(u.get("words") or []) for u in utterances)
+        self.stage_message(
+            "asr",
+            f"Recognized {len(utterances)} segments / {word_count} words -> {self.artifacts.asr_file.name}",
+        )
 
     def _asr_fix(self, _: dict) -> None:
         import json as _json
@@ -160,10 +164,13 @@ class PipelineRunner:
 
         session = _require(self.artifacts.session, "session")
         asr_file = _require(self.artifacts.asr_file, "asr_file")
+        before = len(_json.loads(asr_file.read_text(encoding="utf-8"))["result"]["utterances"])
         self.artifacts.asr_fixed_file = fix_asr_sentences(asr_file, session)
-        data = _json.loads(self.artifacts.asr_fixed_file.read_text(encoding="utf-8"))
-        sentences = data["result"]["utterances"]
-        self.stage_message("asr_fix", f"Split into {len(sentences)} sentences -> {self.artifacts.asr_fixed_file.name}")
+        sentences = _json.loads(self.artifacts.asr_fixed_file.read_text(encoding="utf-8"))["result"]["utterances"]
+        self.stage_message(
+            "asr_fix",
+            f"Re-segmented {before} -> {len(sentences)} sentences -> {self.artifacts.asr_fixed_file.name}",
+        )
 
     def _translate(self, _: dict) -> None:
         import json as _json
@@ -174,8 +181,11 @@ class PipelineRunner:
         settings = database.get_openai_settings()
         self.stage_message("translate", f"Using model {settings['model']} at {settings['base_url']}")
         self.artifacts.translation_file = translate_asr(asr_file, session, settings)
-        segments = _json.loads(self.artifacts.translation_file.read_text(encoding="utf-8"))
-        self.stage_message("translate", f"Translated {len(segments)} segments -> {self.artifacts.translation_file.name}")
+        items = _json.loads(self.artifacts.translation_file.read_text(encoding="utf-8"))["translation"]
+        self.stage_message(
+            "translate",
+            f"Translated {len(items)} sentences -> {self.artifacts.translation_file.name}",
+        )
 
     def _split_audio(self, _: dict) -> None:
         from .adapters.audio import split_audio_by_translation
