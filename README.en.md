@@ -27,6 +27,17 @@ It is useful for:
 - Model downloads prefer ModelScope.
 - Demucs is included as a source submodule because the released package does not provide the API this project needs.
 
+## Demo
+
+Two real samples produced by this project. Both the original English video and the final Chinese-dubbed video live in [`examples/`](examples/) and can be downloaded or previewed directly on GitHub.
+
+| Video | Type | Original (EN) | Dubbed (ZH) |
+| --- | --- | --- | --- |
+| Jensen Huang on Nvidia's Competition ([source](https://www.youtube.com/shorts/TbotsRXyRME)) | Short / vertical | [jensen_huang_source.mp4](examples/jensen_huang_source.mp4) | [jensen_huang_dubbed.mp4](examples/jensen_huang_dubbed.mp4) |
+| How much YT paid me for 129 million shorts views ([source](https://www.youtube.com/watch?v=ii9Kh4XkA5g)) | Long-form / horizontal | [blastoff_yt_payment_source.mp4](examples/blastoff_yt_payment_source.mp4) | [blastoff_yt_payment_dubbed.mp4](examples/blastoff_yt_payment_dubbed.mp4) |
+
+The dubbed versions ship with auto-generated Chinese voiceover and Chinese subtitles, while keeping the original background music and effects.
+
 ## Pipeline
 
 ```text

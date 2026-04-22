@@ -27,6 +27,17 @@ English README: [README.en.md](README.en.md)
 - 默认使用 ModelScope 下载模型，更适合国内网络环境。
 - Demucs 使用源码子模块，避免发布版缺少 `demucs.api` 的问题。
 
+## 效果示例
+
+下面两段视频是用本项目跑出来的真实样例，原始英文视频和最终中文配音视频都放在 [`examples/`](examples/) 目录下，可以直接下载或在 GitHub 网页上点击预览。
+
+| 视频 | 时长 / 类型 | 原始英文 | 中文配音版 |
+| --- | --- | --- | --- |
+| Jensen Huang on Nvidia's Competition（[原始链接](https://www.youtube.com/shorts/TbotsRXyRME)） | 短视频 / 竖屏 Shorts | [jensen_huang_source.mp4](examples/jensen_huang_source.mp4) | [jensen_huang_dubbed.mp4](examples/jensen_huang_dubbed.mp4) |
+| How much YT paid me for 129 million shorts views（[原始链接](https://www.youtube.com/watch?v=ii9Kh4XkA5g)） | 长视频 / 横屏 | [blastoff_yt_payment_source.mp4](examples/blastoff_yt_payment_source.mp4) | [blastoff_yt_payment_dubbed.mp4](examples/blastoff_yt_payment_dubbed.mp4) |
+
+中文版视频均带有自动生成的中文配音和中文字幕，背景音乐与音效保留自原始视频。
+
 ## 工作流程
 
 ```text
