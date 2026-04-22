@@ -29,12 +29,35 @@ It is useful for:
 
 ## Demo
 
-Two real samples produced by this project. The dubbed mp4 files are hosted in this repo's [`demo-assets`](https://github.com/liuzhao1225/YouDub-webui/releases/tag/demo-assets) Release; click to download and play.
+Two real samples produced by this project. The Jensen Huang short plays inline on GitHub; the long-form Blastoff video is larger and ships as download links. All mp4 files live in this repo's [`demo-assets`](https://github.com/liuzhao1225/YouDub-webui/releases/tag/demo-assets) Release.
 
-| Video | Type | Original (EN) | Dubbed (ZH) |
-| --- | --- | --- | --- |
-| Jensen Huang on Nvidia's Competition | Vertical Shorts | [YouTube source](https://www.youtube.com/shorts/TbotsRXyRME) | [Download jensen_huang_dubbed.mp4](https://github.com/liuzhao1225/YouDub-webui/releases/download/demo-assets/jensen_huang_dubbed.mp4) |
-| How much YT paid me for 129 million shorts views | Long-form horizontal | [YouTube source](https://www.youtube.com/watch?v=ii9Kh4XkA5g) | [Download blastoff_yt_payment_dubbed.mp4](https://github.com/liuzhao1225/YouDub-webui/releases/download/demo-assets/blastoff_yt_payment_dubbed.mp4) |
+### 1. Jensen Huang on Nvidia's Competition
+
+[YouTube source](https://www.youtube.com/shorts/TbotsRXyRME) · Vertical Shorts
+
+<table>
+<tr><th>Original (EN)</th><th>Dubbed (ZH)</th></tr>
+<tr>
+<td>
+
+https://github.com/user-attachments/assets/befd11ca-e720-4faa-b4e0-d89bfe73df87
+
+</td>
+<td>
+
+https://github.com/user-attachments/assets/bf01f912-eec8-4e0d-8698-0f69283a73e7
+
+</td>
+</tr>
+</table>
+
+### 2. How much YT paid me for 129 million shorts views
+
+[YouTube source](https://www.youtube.com/watch?v=ii9Kh4XkA5g) · Long-form horizontal
+
+| Original (EN) | Dubbed (ZH) |
+| --- | --- |
+| [Download blastoff_yt_payment_source.mp4](https://github.com/liuzhao1225/YouDub-webui/releases/download/demo-assets/blastoff_yt_payment_source.mp4) | [Download blastoff_yt_payment_dubbed.mp4](https://github.com/liuzhao1225/YouDub-webui/releases/download/demo-assets/blastoff_yt_payment_dubbed.mp4) |
 
 The dubbed versions ship with auto-generated Chinese voiceover and Chinese subtitles, while keeping the original background music and effects.
 

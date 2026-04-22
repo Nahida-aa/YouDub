@@ -29,12 +29,35 @@ English README: [README.en.md](README.en.md)
 
 ## 效果示例
 
-下面是用本项目跑出来的两段真实样例。中文配音版 mp4 托管在本仓库的 [`demo-assets`](https://github.com/liuzhao1225/YouDub-webui/releases/tag/demo-assets) Release 中，点击即可下载播放。
+下面是用本项目跑出来的两段真实样例。Jensen Huang 短视频在 GitHub 页面可以直接播放；Blastoff 长视频体积较大，需要点击下载链接观看。完整 mp4 文件托管在本仓库的 [`demo-assets`](https://github.com/liuzhao1225/YouDub-webui/releases/tag/demo-assets) Release 中。
 
-| 视频 | 类型 | 原始英文 | 中文配音版 |
-| --- | --- | --- | --- |
-| Jensen Huang on Nvidia's Competition | 竖屏 Shorts | [YouTube 原视频](https://www.youtube.com/shorts/TbotsRXyRME) | [下载 jensen_huang_dubbed.mp4](https://github.com/liuzhao1225/YouDub-webui/releases/download/demo-assets/jensen_huang_dubbed.mp4) |
-| How much YT paid me for 129 million shorts views | 横屏长视频 | [YouTube 原视频](https://www.youtube.com/watch?v=ii9Kh4XkA5g) | [下载 blastoff_yt_payment_dubbed.mp4](https://github.com/liuzhao1225/YouDub-webui/releases/download/demo-assets/blastoff_yt_payment_dubbed.mp4) |
+### 1. Jensen Huang on Nvidia's Competition
+
+[原视频链接](https://www.youtube.com/shorts/TbotsRXyRME) · 竖屏 Shorts
+
+<table>
+<tr><th>原始英文</th><th>中文配音版</th></tr>
+<tr>
+<td>
+
+https://github.com/user-attachments/assets/befd11ca-e720-4faa-b4e0-d89bfe73df87
+
+</td>
+<td>
+
+https://github.com/user-attachments/assets/bf01f912-eec8-4e0d-8698-0f69283a73e7
+
+</td>
+</tr>
+</table>
+
+### 2. How much YT paid me for 129 million shorts views
+
+[原视频链接](https://www.youtube.com/watch?v=ii9Kh4XkA5g) · 横屏长视频
+
+| 原始英文 | 中文配音版 |
+| --- | --- |
+| [下载 blastoff_yt_payment_source.mp4](https://github.com/liuzhao1225/YouDub-webui/releases/download/demo-assets/blastoff_yt_payment_source.mp4) | [下载 blastoff_yt_payment_dubbed.mp4](https://github.com/liuzhao1225/YouDub-webui/releases/download/demo-assets/blastoff_yt_payment_dubbed.mp4) |
 
 中文版视频均带有自动生成的中文配音和中文字幕，背景音乐与音效保留自原始视频。
 
