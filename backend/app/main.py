@@ -135,6 +135,18 @@ def _is_inside_workfolder(path: Path) -> bool:
     return True
 
 
+def _purge_task(task: dict) -> None:
+    session_path = task.get("session_path")
+    if session_path:
+        session_dir = Path(session_path)
+        if session_dir.exists() and _is_inside_workfolder(session_dir):
+            shutil.rmtree(session_dir)
+    log_file = database.log_path(task["id"])
+    if log_file.exists():
+        log_file.unlink()
+    database.delete_task(task["id"])
+
+
 @app.delete("/api/tasks/{task_id}", status_code=204)
 def delete_task(task_id: str) -> Response:
     task = database.get_task(task_id)
@@ -142,19 +154,23 @@ def delete_task(task_id: str) -> Response:
         raise HTTPException(status_code=404, detail="Task not found.")
     if task["status"] == "running":
         raise HTTPException(status_code=409, detail="Cannot delete a running task.")
-
-    session_path = task.get("session_path")
-    if session_path:
-        session_dir = Path(session_path)
-        if session_dir.exists() and _is_inside_workfolder(session_dir):
-            shutil.rmtree(session_dir)
-
-    log_file = database.log_path(task_id)
-    if log_file.exists():
-        log_file.unlink()
-
-    database.delete_task(task_id)
+    _purge_task(task)
     return Response(status_code=204)
+
+
+@app.post("/api/tasks/{task_id}/rerun")
+def rerun_task(task_id: str) -> dict:
+    task = database.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found.")
+    if task["status"] == "running":
+        raise HTTPException(status_code=409, detail="Cannot rerun a running task.")
+
+    url = task["url"]
+    _purge_task(task)
+    new_id = database.create_task(url, task_id=task_id)
+    worker.enqueue(new_id)
+    return database.get_task(new_id)
 
 
 @app.get("/api/tasks/{task_id}/log", response_class=PlainTextResponse)

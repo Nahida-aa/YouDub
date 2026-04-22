@@ -151,6 +151,56 @@ def test_delete_task_rejects_running_task(monkeypatch, tmp_path):
     assert database.get_task(task_id) is not None
 
 
+def test_rerun_task_purges_session_and_requeues(monkeypatch, tmp_path):
+    configure_tmp_runtime(monkeypatch, tmp_path)
+    enqueued: list[str] = []
+    monkeypatch.setattr(main.worker, "enqueue", lambda task_id: enqueued.append(task_id))
+
+    task_id = database.create_task("https://www.youtube.com/watch?v=rerunvideox", task_id="rerunvideox")
+    session = config.WORKFOLDER / "uploader" / "title__rerunvideox"
+    (session / "media").mkdir(parents=True)
+    (session / "media" / "video_source.mp4").write_bytes(b"old")
+    database.update_task(task_id, session_path=str(session), status="failed")
+    log_file = database.log_path(task_id)
+    log_file.write_text("old run", encoding="utf-8")
+
+    client = TestClient(main.app)
+    response = client.post(f"/api/tasks/{task_id}/rerun")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == task_id
+    assert body["status"] == "queued"
+    assert body["session_path"] is None
+    assert enqueued == [task_id]
+    assert not session.exists()
+    assert not log_file.exists()
+
+
+def test_rerun_task_returns_404_for_unknown(monkeypatch, tmp_path):
+    configure_tmp_runtime(monkeypatch, tmp_path)
+    client = TestClient(main.app)
+
+    response = client.post("/api/tasks/missing/rerun")
+
+    assert response.status_code == 404
+
+
+def test_rerun_task_rejects_running_task(monkeypatch, tmp_path):
+    configure_tmp_runtime(monkeypatch, tmp_path)
+    enqueued: list[str] = []
+    monkeypatch.setattr(main.worker, "enqueue", lambda task_id: enqueued.append(task_id))
+    task_id = database.create_task("https://www.youtube.com/watch?v=runrerunvid", task_id="runrerunvid")
+    database.update_task(task_id, status="running")
+
+    client = TestClient(main.app)
+    response = client.post(f"/api/tasks/{task_id}/rerun")
+
+    assert response.status_code == 409
+    assert enqueued == []
+    assert database.get_task(task_id)["status"] == "running"
+
+
 def test_delete_task_skips_session_outside_workfolder(monkeypatch, tmp_path):
     configure_tmp_runtime(monkeypatch, tmp_path)
     task_id = database.create_task("https://www.youtube.com/watch?v=outsidevidx", task_id="outsidevidx")

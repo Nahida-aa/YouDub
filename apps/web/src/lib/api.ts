@@ -113,6 +113,10 @@ export function deleteTask(taskId: string) {
   return request<void>(`/api/tasks/${taskId}`, { method: "DELETE" })
 }
 
+export function rerunTask(taskId: string) {
+  return request<Task>(`/api/tasks/${taskId}/rerun`, { method: "POST" })
+}
+
 export function createTask(url: string) {
   return request<Task>("/api/tasks", {
     method: "POST",

@@ -8,6 +8,7 @@ import {
   Download,
   FileText,
   Loader2,
+  RotateCw,
   Trash2,
   XCircle,
 } from "lucide-react"
@@ -20,6 +21,7 @@ import {
   finalVideoUrl,
   getTask,
   getTaskLog,
+  rerunTask,
 } from "@/lib/api"
 import { statusBadgeClass } from "@/lib/status"
 import { AppHeader } from "@/components/app-header"
@@ -79,6 +81,9 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState("")
+  const [rerunOpen, setRerunOpen] = useState(false)
+  const [rerunning, setRerunning] = useState(false)
+  const [rerunError, setRerunError] = useState("")
 
   const handleDelete = async () => {
     setDeleting(true)
@@ -89,6 +94,21 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : "Failed to delete task")
       setDeleting(false)
+    }
+  }
+
+  const handleRerun = async () => {
+    setRerunning(true)
+    setRerunError("")
+    try {
+      const next = await rerunTask(id)
+      setRerunOpen(false)
+      setTask(next)
+      setLog("")
+    } catch (err) {
+      setRerunError(err instanceof Error ? err.message : "Failed to rerun task")
+    } finally {
+      setRerunning(false)
     }
   }
 
@@ -267,48 +287,85 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
           <CardHeader>
             <CardTitle className="text-red-700">Danger zone</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-muted-foreground">
-              Delete this task, its run log, and the entire session directory under <code className="font-mono text-xs">workfolder/</code>.
-            </p>
-            <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-              <DialogTrigger
-                render={
-                  <Button variant="destructive" disabled={!task || isRunning}>
-                    <Trash2 className="size-4" />
-                    Delete task
-                  </Button>
-                }
-              />
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Delete this task?</DialogTitle>
-                  <DialogDescription>
-                    This permanently removes the task record, its log file, and the entire session directory. This action cannot be undone.
-                  </DialogDescription>
-                </DialogHeader>
-                {deleteError ? (
-                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                    {deleteError}
-                  </div>
-                ) : null}
-                <DialogFooter>
-                  <DialogClose render={<Button variant="outline" disabled={deleting} />}>
-                    Cancel
-                  </DialogClose>
-                  <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-                    {deleting ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-                    {deleting ? "Deleting" : "Confirm delete"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+          <CardContent className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted-foreground">
+                Wipe the session directory and run this URL again from scratch.
+              </p>
+              <Dialog open={rerunOpen} onOpenChange={setRerunOpen}>
+                <DialogTrigger
+                  render={
+                    <Button variant="outline" disabled={!task || isRunning}>
+                      <RotateCw className="size-4" />
+                      Rerun task
+                    </Button>
+                  }
+                />
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Rerun this task?</DialogTitle>
+                    <DialogDescription>
+                      Existing log, session directory and final video will be deleted, then the same URL is re-queued under the same task id.
+                    </DialogDescription>
+                  </DialogHeader>
+                  {rerunError ? (
+                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                      {rerunError}
+                    </div>
+                  ) : null}
+                  <DialogFooter>
+                    <DialogClose render={<Button variant="outline" disabled={rerunning} />}>
+                      Cancel
+                    </DialogClose>
+                    <Button onClick={handleRerun} disabled={rerunning}>
+                      {rerunning ? <Loader2 className="size-4 animate-spin" /> : <RotateCw className="size-4" />}
+                      {rerunning ? "Rerunning" : "Confirm rerun"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted-foreground">
+                Delete this task, its run log, and the entire session directory under <code className="font-mono text-xs">workfolder/</code>.
+              </p>
+              <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+                <DialogTrigger
+                  render={
+                    <Button variant="destructive" disabled={!task || isRunning}>
+                      <Trash2 className="size-4" />
+                      Delete task
+                    </Button>
+                  }
+                />
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Delete this task?</DialogTitle>
+                    <DialogDescription>
+                      This permanently removes the task record, its log file, and the entire session directory. This action cannot be undone.
+                    </DialogDescription>
+                  </DialogHeader>
+                  {deleteError ? (
+                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                      {deleteError}
+                    </div>
+                  ) : null}
+                  <DialogFooter>
+                    <DialogClose render={<Button variant="outline" disabled={deleting} />}>
+                      Cancel
+                    </DialogClose>
+                    <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+                      {deleting ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                      {deleting ? "Deleting" : "Confirm delete"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+            {isRunning ? (
+              <p className="text-xs text-amber-600">Running tasks cannot be rerun or deleted. Wait until it finishes or fails.</p>
+            ) : null}
           </CardContent>
-          {isRunning ? (
-            <CardContent className="pt-0">
-              <p className="text-xs text-amber-600">Cannot delete a running task. Wait until it finishes or fails.</p>
-            </CardContent>
-          ) : null}
         </Card>
       </div>
     </main>
