@@ -6,6 +6,8 @@
 
 English README: [README.en.md](README.en.md)
 
+> **作者的 B 站频道**：[黑纹白斑马](https://space.bilibili.com/1263732318)（粉丝 65 万+，视频 2 万+，自称"赛博普罗米修斯"），全站作品均使用 YouDub WebUI 自动翻译配音，覆盖科技、游戏、科普、动物、历史等题材。想看本项目实际跑出来的成品视频，欢迎前往关注。
+
 ## 效果示例
 
 下面是用本项目跑出来的两段真实样例，均可在 GitHub 页面直接播放。Blastoff 长视频展示的是开头 40 秒切片，完整 mp4 文件托管在本仓库的 [`demo-assets`](https://github.com/liuzhao1225/YouDub-webui/releases/tag/demo-assets) Release 中。

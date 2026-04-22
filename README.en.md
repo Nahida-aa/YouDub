@@ -6,6 +6,8 @@ Paste a YouTube URL, configure YouTube cookies and an OpenAI-compatible API, the
 
 中文 README: [README.md](README.md)
 
+> **Author's Bilibili channel**: [黑纹白斑马](https://space.bilibili.com/1263732318) — 650K+ followers, 20K+ videos, self-titled "Cyber Prometheus". The entire channel is dubbed with YouDub WebUI, covering tech, gaming, science, animals, history and more. Visit it to see what this project produces in the wild.
+
 ## Demo
 
 Two real samples produced by this project, both playable inline on GitHub. The Blastoff sample shows the first 40 seconds; full mp4 files live in this repo's [`demo-assets`](https://github.com/liuzhao1225/YouDub-webui/releases/tag/demo-assets) Release.
