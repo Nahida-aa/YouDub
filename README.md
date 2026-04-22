@@ -6,27 +6,6 @@
 
 English README: [README.en.md](README.en.md)
 
-## 为什么做这个项目
-
-现在有很多优秀的视频内容只存在于某一种语言里。YouDub WebUI 希望把「看懂外语视频」这件事变得更简单：不做复杂平台，不做繁重工作流，只保留一个本地可跑、容易理解、方便二次开发的最小系统。
-
-它适合：
-
-- 想把 YouTube 视频转换成中文配音的个人用户。
-- 想研究 AI 视频本地化流程的开发者。
-- 想基于 Whisper、VoxCPM、OpenAI API、Demucs、FFmpeg 做产品原型的人。
-- 想参与开源共建，让跨语言内容传播更容易的人。
-
-## 功能亮点
-
-- 单页 Web 控制台，输入 URL 即可开始。
-- 可以在页面里管理 YouTube Cookie、代理端口和 OpenAI 兼容 API 设置。
-- 实时查看任务进度，知道当前跑到下载、识别、翻译、配音还是合成。
-- 所有流程串行执行，架构简单，方便调试和改造。
-- 运行数据保存在本地 SQLite 和本地文件中。
-- 默认使用 ModelScope 下载模型，更适合国内网络环境。
-- Demucs 使用源码子模块，避免发布版缺少 `demucs.api` 的问题。
-
 ## 效果示例
 
 下面是用本项目跑出来的两段真实样例，均可在 GitHub 页面直接播放。Blastoff 长视频展示的是开头 40 秒切片，完整 mp4 文件托管在本仓库的 [`demo-assets`](https://github.com/liuzhao1225/YouDub-webui/releases/tag/demo-assets) Release 中。
@@ -72,6 +51,27 @@ https://github.com/user-attachments/assets/158de60a-7de4-4ddf-b3d8-478d0423aee6
 </table>
 
 中文版视频均带有自动生成的中文配音和中文字幕，背景音乐与音效保留自原始视频。
+
+## 为什么做这个项目
+
+现在有很多优秀的视频内容只存在于某一种语言里。YouDub WebUI 希望把「看懂外语视频」这件事变得更简单：不做复杂平台，不做繁重工作流，只保留一个本地可跑、容易理解、方便二次开发的最小系统。
+
+它适合：
+
+- 想把 YouTube 视频转换成中文配音的个人用户。
+- 想研究 AI 视频本地化流程的开发者。
+- 想基于 Whisper、VoxCPM、OpenAI API、Demucs、FFmpeg 做产品原型的人。
+- 想参与开源共建，让跨语言内容传播更容易的人。
+
+## 功能亮点
+
+- 单页 Web 控制台，输入 URL 即可开始。
+- 可以在页面里管理 YouTube Cookie、代理端口和 OpenAI 兼容 API 设置。
+- 实时查看任务进度，知道当前跑到下载、识别、翻译、配音还是合成。
+- 所有流程串行执行，架构简单，方便调试和改造。
+- 运行数据保存在本地 SQLite 和本地文件中。
+- 默认使用 ModelScope 下载模型，更适合国内网络环境。
+- Demucs 使用源码子模块，避免发布版缺少 `demucs.api` 的问题。
 
 ## 工作流程
 
@@ -134,7 +134,6 @@ npm --prefix apps/web install --registry=https://registry.npmmirror.com
 ### 4. 配置环境
 
 ```bash
-cp env.txt.example env.txt
 cp env.txt.example .env
 ```
 
@@ -150,7 +149,7 @@ OPENAI_MODEL=gpt-4o-mini
 YTDLP_PROXY_PORT=
 ```
 
-`.env` 用于应用运行，`env.txt` 方便本地记录和修改配置。不要提交任何密钥、Cookie 或下载产物。
+`.env` 用于应用运行。不要提交任何密钥、Cookie 或下载产物。
 
 ### 5. 启动
 
@@ -183,6 +182,15 @@ http://localhost:3000
 5. 保存后回到首页，输入 YouTube URL，开始转换。
 
 API key 和 Cookie 会在页面中脱敏显示，后端不会把 Cookie 明文返回给前端。
+
+### 如何导出 YouTube Cookie
+
+推荐使用 Chrome 扩展 [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)（开源，cookie 不出本机）：
+
+1. 在 Chrome 安装扩展并保持启用。
+2. 登录 `https://www.youtube.com`。
+3. 在 youtube.com 页面点扩展图标，选择 `Export` → `Netscape`，得到 `cookies.txt`。
+4. 把文件内容整段粘贴到 Settings 的 Cookie 输入框。
 
 任务详情页底部提供 **Danger zone**，确认后会调用 `DELETE /api/tasks/{id}`，同时清理 SQLite 记录、运行日志以及 `workfolder/` 下整段会话目录。运行中的任务无法删除。
 

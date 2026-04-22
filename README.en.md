@@ -6,27 +6,6 @@ Paste a YouTube URL, configure YouTube cookies and an OpenAI-compatible API, the
 
 中文 README: [README.md](README.md)
 
-## Why This Project Exists
-
-Many great videos are locked behind language barriers. YouDub WebUI tries to make video localization easier to understand, run, and modify. It is not a heavy platform or a complex workflow engine. It is a small local-first system that developers can quickly try and extend.
-
-It is useful for:
-
-- People who want Chinese-dubbed versions of YouTube videos.
-- Developers exploring AI video localization.
-- Builders prototyping with FunASR, VoxCPM, OpenAI APIs, Demucs, and FFmpeg.
-- Open-source contributors who want to help ideas travel across languages.
-
-## Highlights
-
-- One-page web console: paste a URL and start.
-- Manage YouTube cookies, proxy port, and OpenAI-compatible API settings in the UI.
-- See task progress stage by stage.
-- Serial pipeline by design, making it easy to debug and customize.
-- Local SQLite state and local filesystem artifacts.
-- Model downloads prefer ModelScope.
-- Demucs is included as a source submodule because the released package does not provide the API this project needs.
-
 ## Demo
 
 Two real samples produced by this project, both playable inline on GitHub. The Blastoff sample shows the first 40 seconds; full mp4 files live in this repo's [`demo-assets`](https://github.com/liuzhao1225/YouDub-webui/releases/tag/demo-assets) Release.
@@ -72,6 +51,27 @@ https://github.com/user-attachments/assets/158de60a-7de4-4ddf-b3d8-478d0423aee6
 </table>
 
 The dubbed versions ship with auto-generated Chinese voiceover and Chinese subtitles, while keeping the original background music and effects.
+
+## Why This Project Exists
+
+Many great videos are locked behind language barriers. YouDub WebUI tries to make video localization easier to understand, run, and modify. It is not a heavy platform or a complex workflow engine. It is a small local-first system that developers can quickly try and extend.
+
+It is useful for:
+
+- People who want Chinese-dubbed versions of YouTube videos.
+- Developers exploring AI video localization.
+- Builders prototyping with FunASR, VoxCPM, OpenAI APIs, Demucs, and FFmpeg.
+- Open-source contributors who want to help ideas travel across languages.
+
+## Highlights
+
+- One-page web console: paste a URL and start.
+- Manage YouTube cookies, proxy port, and OpenAI-compatible API settings in the UI.
+- See task progress stage by stage.
+- Serial pipeline by design, making it easy to debug and customize.
+- Local SQLite state and local filesystem artifacts.
+- Model downloads prefer ModelScope.
+- Demucs is included as a source submodule because the released package does not provide the API this project needs.
 
 ## Pipeline
 
@@ -127,7 +127,6 @@ Use Aliyun first. If one Python package fails, retry only that package with Tsin
 ### 4. Configure
 
 ```bash
-cp env.txt.example env.txt
 cp env.txt.example .env
 ```
 
@@ -143,7 +142,7 @@ OPENAI_MODEL=gpt-4o-mini
 YTDLP_PROXY_PORT=
 ```
 
-The app reads `.env`. Use `env.txt` as a local editable note if you want. Do not commit secrets, cookies, downloaded media, or generated artifacts.
+The app reads `.env`. Do not commit secrets, cookies, downloaded media, or generated artifacts.
 
 ### 5. Run
 
@@ -176,6 +175,15 @@ Open Settings:
 5. Save settings, return to the main page, paste a YouTube URL, and start.
 
 API keys and cookies are masked in the UI. The backend does not return plaintext cookie content to the frontend.
+
+### How to export YouTube cookies
+
+Use the open-source Chrome extension [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc) (cookies never leave your machine):
+
+1. Install the extension and keep it enabled.
+2. Sign in to `https://www.youtube.com`.
+3. On any youtube.com page, click the extension and choose `Export` → `Netscape` to get `cookies.txt`.
+4. Paste the full file content into the Cookie field in Settings.
 
 ## Tech Stack
 
