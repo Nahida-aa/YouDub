@@ -22,6 +22,7 @@ class PipelineArtifacts:
     vocals_dir: Path | None = None
     tts_dir: Path | None = None
     dubbing_file: Path | None = None
+    timings_file: Path | None = None
     final_video: Path | None = None
 
 
@@ -212,8 +213,10 @@ class PipelineRunner:
         session = _require(self.artifacts.session, "session")
         translation_file = _require(self.artifacts.translation_file, "translation_file")
         tts_dir = _require(self.artifacts.tts_dir, "tts_dir")
-        self.artifacts.dubbing_file = merge_tts_audio(translation_file, tts_dir, session)
-        self.stage_message("merge_audio", "Merged dubbing timeline")
+        dubbing, timings = merge_tts_audio(translation_file, tts_dir, session)
+        self.artifacts.dubbing_file = dubbing
+        self.artifacts.timings_file = timings
+        self.stage_message("merge_audio", f"Dubbing -> {dubbing.name}, timings -> {timings.name}")
 
     def _merge_video(self, _: dict) -> None:
         from .adapters.ffmpeg import merge_video
@@ -222,8 +225,8 @@ class PipelineRunner:
         video_file = _require(self.artifacts.video_file, "video_file")
         dubbing_file = _require(self.artifacts.dubbing_file, "dubbing_file")
         bgm_file = _require(self.artifacts.bgm_file, "bgm_file")
-        translation_file = _require(self.artifacts.translation_file, "translation_file")
-        self.artifacts.final_video = merge_video(video_file, dubbing_file, bgm_file, translation_file, session)
+        timings_file = _require(self.artifacts.timings_file, "timings_file")
+        self.artifacts.final_video = merge_video(video_file, dubbing_file, bgm_file, timings_file, session)
         size_mb = self.artifacts.final_video.stat().st_size / (1024 * 1024)
         self.stage_message("merge_video", f"Final video: {self.artifacts.final_video} ({size_mb:.1f} MB)")
 

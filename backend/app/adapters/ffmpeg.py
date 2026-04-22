@@ -1,8 +1,18 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from pathlib import Path
+
+SUBTITLE_PUNCTUATION = {"，", ",", "；", ";", "：", ":", "。", "?", "？", "!", "！", "、"}
+SUBTITLE_PROTECTED_PAIRS = {"《": "》", "（": "）", "【": "】", "「": "」", "『": "』"}
+SUBTITLE_CLOSING_QUOTES = {'"', "'", "」", "』", "》", "）", "】", "\u201d", "\u2019", "]"}
+SUBTITLE_MIN_FRAGMENT_LEN = 5
+SUBTITLE_MIN_DURATION_MS = 200
+SUBTITLE_TAIL_BUFFER_MS = 100
+SUBTITLE_DURATION_FLOOR_MS = 600
+
 
 LANDSCAPE_SUBTITLE_STYLE = (
     "FontName=Arial,"
@@ -36,15 +46,124 @@ def _srt_time(ms: int) -> str:
     return f"{hours:02d}:{minutes:02d}:{seconds:02d},{millis:03d}"
 
 
+def _split_protected(text: str) -> list[str]:
+    segments: list[str] = []
+    buf: list[str] = []
+    inside = None
+    for ch in text:
+        if inside is None and ch in SUBTITLE_PROTECTED_PAIRS:
+            inside = SUBTITLE_PROTECTED_PAIRS[ch]
+            buf.append(ch)
+            continue
+        if inside is not None and ch == inside:
+            inside = None
+            buf.append(ch)
+            continue
+        if inside is None and ch in SUBTITLE_PUNCTUATION:
+            chunk = "".join(buf).strip()
+            if chunk:
+                segments.append(chunk)
+            buf.clear()
+            continue
+        buf.append(ch)
+    tail = "".join(buf).strip()
+    if tail:
+        segments.append(tail)
+    return segments
+
+
+def _attach_closing_quotes(segments: list[str]) -> list[str]:
+    fixed: list[str] = []
+    for seg in segments:
+        if seg and seg[0] in SUBTITLE_CLOSING_QUOTES and fixed:
+            fixed[-1] = f"{fixed[-1]}{seg}".strip()
+            continue
+        fixed.append(seg.strip())
+    return fixed
+
+
+def _merge_short_fragments(segments: list[str]) -> list[str]:
+    merged: list[str] = []
+    i = 0
+    while i < len(segments):
+        cur = segments[i]
+        if len(cur.strip()) < SUBTITLE_MIN_FRAGMENT_LEN and i + 1 < len(segments):
+            segments[i + 1] = f"{cur}{segments[i + 1]}".strip()
+            i += 1
+            continue
+        merged.append(cur)
+        i += 1
+    return merged
+
+
+def _strip_trailing_punct(segments: list[str]) -> list[str]:
+    cleaned: list[str] = []
+    for item in segments:
+        text = item.strip()
+        if not text:
+            continue
+        if text.endswith(("，", ",", "。")):
+            text = text[:-1]
+        cleaned.append(re.sub(r"\s+", " ", text).strip())
+    return cleaned
+
+
+def split_subtitle_text(text: str) -> list[str]:
+    original = (text or "").strip()
+    if not original:
+        return []
+    segments = _split_protected(original)
+    if not segments:
+        return [original]
+    segments = _attach_closing_quotes(segments)
+    segments = _merge_short_fragments(segments)
+    cleaned = _strip_trailing_punct(segments)
+    return cleaned or [original]
+
+
+def _allocate_durations(fragments: list[str], total_duration: int) -> list[int]:
+    if len(fragments) == 1:
+        return [total_duration]
+    weights = [max(1, len(f.replace(" ", ""))) for f in fragments]
+    total_weight = sum(weights)
+    durations: list[int] = []
+    allocated = 0
+    for i, weight in enumerate(weights[:-1]):
+        share = round(total_duration * weight / total_weight)
+        if total_duration >= SUBTITLE_DURATION_FLOOR_MS:
+            ceiling = total_duration - allocated - SUBTITLE_TAIL_BUFFER_MS
+            share = max(SUBTITLE_MIN_DURATION_MS, min(share, ceiling))
+        else:
+            share = max(int(SUBTITLE_MIN_DURATION_MS / 2), share)
+        durations.append(share)
+        allocated += share
+    durations.append(max(SUBTITLE_TAIL_BUFFER_MS, total_duration - allocated))
+    return durations
+
+
+def _segment_times(item: dict) -> tuple[int, int]:
+    start = int(item.get("actual_start_time", item["start_time"]))
+    end = int(item.get("actual_end_time", item["end_time"]))
+    return start, end
+
+
 def write_srt(translation_file: Path, session: Path) -> Path:
     output_file = session / "metadata" / "subtitles.zh.srt"
     data = json.loads(translation_file.read_text(encoding="utf-8"))
     lines: list[str] = []
-    for index, item in enumerate(data["translation"], start=1):
-        lines.append(str(index))
-        lines.append(f"{_srt_time(int(item['start_time']))} --> {_srt_time(int(item['end_time']))}")
-        lines.append(item["zh"])
-        lines.append("")
+    idx = 1
+    for item in data["translation"]:
+        start, end = _segment_times(item)
+        if end <= start:
+            continue
+        fragments = split_subtitle_text(item.get("zh") or "")
+        if not fragments:
+            continue
+        cursor = start
+        for fragment, duration in zip(fragments, _allocate_durations(fragments, end - start)):
+            lines.extend([str(idx), f"{_srt_time(cursor)} --> {_srt_time(cursor + duration)}", fragment, ""])
+            cursor += duration
+            idx += 1
     output_file.write_text("\n".join(lines), encoding="utf-8")
     return output_file
 
@@ -101,7 +220,7 @@ def subtitle_filter(video_file: Path, subtitle_file: Path) -> str:
     return f"subtitles=filename='{sub_path}':force_style='{style}'"
 
 
-def merge_video(video_file: Path, dubbing_file: Path, bgm_file: Path, translation_file: Path, session: Path) -> Path:
+def merge_video(video_file: Path, dubbing_file: Path, bgm_file: Path, timings_file: Path, session: Path) -> Path:
     tmp_dir = session / "tmp"
     media_dir = session / "media"
     tmp_dir.mkdir(parents=True, exist_ok=True)
@@ -110,7 +229,7 @@ def merge_video(video_file: Path, dubbing_file: Path, bgm_file: Path, translatio
     if final_video.exists():
         return final_video
 
-    subtitles = write_srt(translation_file, session)
+    subtitles = write_srt(timings_file, session)
     mixed_audio = tmp_dir / "audio_mixed.m4a"
     subprocess.run(
         [

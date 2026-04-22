@@ -39,12 +39,18 @@ def test_merge_video_burns_portrait_subtitles(monkeypatch, tmp_path):
     session = tmp_path / "session"
     metadata_dir = session / "metadata"
     metadata_dir.mkdir(parents=True)
-    translation = metadata_dir / "translation.zh.json"
-    translation.write_text(
+    timings = metadata_dir / "timings.json"
+    timings.write_text(
         json.dumps(
             {
                 "translation": [
-                    {"start_time": 0, "end_time": 1200, "zh": "你好"},
+                    {
+                        "start_time": 0,
+                        "end_time": 1200,
+                        "actual_start_time": 0,
+                        "actual_end_time": 1200,
+                        "zh": "你好",
+                    }
                 ]
             }
         ),
@@ -64,7 +70,7 @@ def test_merge_video_burns_portrait_subtitles(monkeypatch, tmp_path):
         tmp_path / "video.mp4",
         tmp_path / "dubbing.wav",
         tmp_path / "bgm.wav",
-        translation,
+        timings,
         session,
     )
 
@@ -76,3 +82,39 @@ def test_merge_video_burns_portrait_subtitles(monkeypatch, tmp_path):
     assert "FontSize=12" in filter_arg
     assert "MarginV=70" in filter_arg
     assert "-c:s" not in final_command
+
+
+def test_split_subtitle_text_breaks_on_punctuation_and_keeps_protected():
+    out = ffmpeg.split_subtitle_text("我们今天讨论一下宇宙的边界，那是一个神秘话题；不过别担心，我会详细解释。")
+    assert len(out) >= 3
+    assert all(len(s) >= 2 for s in out)
+    protected = ffmpeg.split_subtitle_text("他说《三体，黑暗森林》是经典，必读。")
+    assert any("《三体，黑暗森林》" in s for s in protected)
+
+
+def test_write_srt_splits_long_sentence_into_multiple_entries(tmp_path):
+    session = tmp_path / "session"
+    metadata_dir = session / "metadata"
+    metadata_dir.mkdir(parents=True)
+    timings = metadata_dir / "timings.json"
+    timings.write_text(
+        json.dumps(
+            {
+                "translation": [
+                    {
+                        "start_time": 0,
+                        "end_time": 6000,
+                        "actual_start_time": 0,
+                        "actual_end_time": 6000,
+                        "zh": "我们今天讨论宇宙的边界，那是一个神秘话题；不过别担心，我会详细解释",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    srt = ffmpeg.write_srt(timings, session)
+    content = srt.read_text(encoding="utf-8")
+    blocks = [b for b in content.strip().split("\n\n") if b.strip()]
+    assert len(blocks) >= 3
+    assert all("-->" in b for b in blocks)

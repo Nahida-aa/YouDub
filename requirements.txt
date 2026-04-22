@@ -15,6 +15,7 @@ voxcpm
 soundfile
 pydub
 librosa
+audiostretchy
 numpy
 pytest
 httpx
