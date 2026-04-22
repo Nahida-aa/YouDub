@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="apps/web/public/youdub-logo.svg" alt="YouDub" width="320" />
+</p>
+
 # YouDub WebUI
 
 A simple local web app for turning YouTube videos into Chinese-dubbed videos.

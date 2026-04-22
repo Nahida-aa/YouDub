@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="apps/web/public/youdub-logo.svg" alt="YouDub" width="320" />
+</p>
+
 # YouDub WebUI
 
 一个尽量简单、可本地运行的 YouTube 中文配音工具。

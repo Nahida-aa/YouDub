@@ -20,11 +20,19 @@ export function AppHeader({ backHref }: { backHref?: string }) {
             <ArrowLeft className="size-4" />
           </Button>
         ) : null}
-        <Link href="/" className="flex flex-col">
-          <span className="text-sm font-medium text-[#ff0033]">YouDub</span>
-          <span className="text-2xl font-semibold tracking-normal text-zinc-950 sm:text-3xl">
-            YouTube Chinese dubbing
-          </span>
+        <Link href="/" className="flex items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/youdub-logo.svg"
+            alt="YouDub"
+            className="h-10 w-auto sm:h-12"
+          />
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-[#ff0033]">YouDub</span>
+            <span className="text-2xl font-semibold tracking-normal text-zinc-950 sm:text-3xl">
+              YouTube Chinese dubbing
+            </span>
+          </div>
         </Link>
       </div>
       <SettingsDialog />
