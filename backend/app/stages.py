@@ -12,7 +12,8 @@ class StageSpec:
 STAGES: tuple[StageSpec, ...] = (
     StageSpec("download", "Download"),
     StageSpec("separate", "Demucs"),
-    StageSpec("asr", "FunASR"),
+    StageSpec("asr", "Whisper"),
+    StageSpec("asr_fix", "Split sentences"),
     StageSpec("translate", "Translate"),
     StageSpec("split_audio", "Split audio"),
     StageSpec("tts", "VoxCPM"),
