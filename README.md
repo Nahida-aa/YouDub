@@ -29,7 +29,7 @@ English README: [README.en.md](README.en.md)
 
 ## 效果示例
 
-下面是用本项目跑出来的两段真实样例。Jensen Huang 短视频在 GitHub 页面可以直接播放；Blastoff 长视频体积较大，需要点击下载链接观看。完整 mp4 文件托管在本仓库的 [`demo-assets`](https://github.com/liuzhao1225/YouDub-webui/releases/tag/demo-assets) Release 中。
+下面是用本项目跑出来的两段真实样例，均可在 GitHub 页面直接播放。Blastoff 长视频展示的是开头 40 秒切片，完整 mp4 文件托管在本仓库的 [`demo-assets`](https://github.com/liuzhao1225/YouDub-webui/releases/tag/demo-assets) Release 中。
 
 ### 1. Jensen Huang on Nvidia's Competition
 
@@ -53,11 +53,23 @@ https://github.com/user-attachments/assets/bf01f912-eec8-4e0d-8698-0f69283a73e7
 
 ### 2. How much YT paid me for 129 million shorts views
 
-[原视频链接](https://www.youtube.com/watch?v=ii9Kh4XkA5g) · 横屏长视频
+[原视频链接](https://www.youtube.com/watch?v=ii9Kh4XkA5g) · 横屏长视频 · 下方为开头 40 秒切片，完整版可在 [`demo-assets`](https://github.com/liuzhao1225/YouDub-webui/releases/tag/demo-assets) Release 下载
 
-| 原始英文 | 中文配音版 |
-| --- | --- |
-| [下载 blastoff_yt_payment_source.mp4](https://github.com/liuzhao1225/YouDub-webui/releases/download/demo-assets/blastoff_yt_payment_source.mp4) | [下载 blastoff_yt_payment_dubbed.mp4](https://github.com/liuzhao1225/YouDub-webui/releases/download/demo-assets/blastoff_yt_payment_dubbed.mp4) |
+<table>
+<tr><th>原始英文</th><th>中文配音版</th></tr>
+<tr>
+<td>
+
+https://github.com/user-attachments/assets/bd02936f-cf3c-4e4b-85b5-0410d38f69f5
+
+</td>
+<td>
+
+https://github.com/user-attachments/assets/158de60a-7de4-4ddf-b3d8-478d0423aee6
+
+</td>
+</tr>
+</table>
 
 中文版视频均带有自动生成的中文配音和中文字幕，背景音乐与音效保留自原始视频。
 

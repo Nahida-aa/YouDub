@@ -29,7 +29,7 @@ It is useful for:
 
 ## Demo
 
-Two real samples produced by this project. The Jensen Huang short plays inline on GitHub; the long-form Blastoff video is larger and ships as download links. All mp4 files live in this repo's [`demo-assets`](https://github.com/liuzhao1225/YouDub-webui/releases/tag/demo-assets) Release.
+Two real samples produced by this project, both playable inline on GitHub. The Blastoff sample shows the first 40 seconds; full mp4 files live in this repo's [`demo-assets`](https://github.com/liuzhao1225/YouDub-webui/releases/tag/demo-assets) Release.
 
 ### 1. Jensen Huang on Nvidia's Competition
 
@@ -53,11 +53,23 @@ https://github.com/user-attachments/assets/bf01f912-eec8-4e0d-8698-0f69283a73e7
 
 ### 2. How much YT paid me for 129 million shorts views
 
-[YouTube source](https://www.youtube.com/watch?v=ii9Kh4XkA5g) · Long-form horizontal
+[YouTube source](https://www.youtube.com/watch?v=ii9Kh4XkA5g) · Long-form horizontal · 40-second clip below; full version available in the [`demo-assets`](https://github.com/liuzhao1225/YouDub-webui/releases/tag/demo-assets) Release
 
-| Original (EN) | Dubbed (ZH) |
-| --- | --- |
-| [Download blastoff_yt_payment_source.mp4](https://github.com/liuzhao1225/YouDub-webui/releases/download/demo-assets/blastoff_yt_payment_source.mp4) | [Download blastoff_yt_payment_dubbed.mp4](https://github.com/liuzhao1225/YouDub-webui/releases/download/demo-assets/blastoff_yt_payment_dubbed.mp4) |
+<table>
+<tr><th>Original (EN)</th><th>Dubbed (ZH)</th></tr>
+<tr>
+<td>
+
+https://github.com/user-attachments/assets/bd02936f-cf3c-4e4b-85b5-0410d38f69f5
+
+</td>
+<td>
+
+https://github.com/user-attachments/assets/158de60a-7de4-4ddf-b3d8-478d0423aee6
+
+</td>
+</tr>
+</table>
 
 The dubbed versions ship with auto-generated Chinese voiceover and Chinese subtitles, while keeping the original background music and effects.
 
