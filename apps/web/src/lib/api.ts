@@ -68,8 +68,28 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return response.json()
 }
 
+export type TaskSummary = {
+  id: string
+  url: string
+  status: TaskStatus
+  current_stage: string | null
+  final_video_path: string | null
+  error_message: string | null
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
+}
+
 export function getCurrentTask() {
   return request<Task | null>("/api/tasks/current")
+}
+
+export function listTasks(limit = 100) {
+  return request<{ tasks: TaskSummary[] }>(`/api/tasks?limit=${limit}`)
+}
+
+export function getTask(taskId: string) {
+  return request<Task>(`/api/tasks/${taskId}`)
 }
 
 export function createTask(url: string) {
@@ -128,4 +148,8 @@ export function saveYtdlpSettings(settings: YtdlpSettings) {
 
 export function finalVideoUrl(taskId: string) {
   return `${API_BASE}/api/tasks/${taskId}/artifact/final-video`
+}
+
+export function finalVideoDownloadUrl(taskId: string) {
+  return `${API_BASE}/api/tasks/${taskId}/artifact/final-video?download=1`
 }

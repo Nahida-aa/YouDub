@@ -66,6 +66,22 @@ def test_running_task_blocks_second_submit(monkeypatch, tmp_path):
     assert second.status_code == 409
 
 
+def test_list_tasks_returns_history_newest_first(monkeypatch, tmp_path):
+    configure_tmp_runtime(monkeypatch, tmp_path)
+    older = database.create_task("https://www.youtube.com/watch?v=oldvideoidx")
+    newer = database.create_task("https://www.youtube.com/watch?v=newvideoidx")
+    client = TestClient(main.app)
+
+    response = client.get("/api/tasks")
+
+    assert response.status_code == 200
+    body = response.json()
+    ids = [task["id"] for task in body["tasks"]]
+    assert ids == [newer, older]
+    assert "stages" not in body["tasks"][0]
+    assert set(body["tasks"][0].keys()) >= {"id", "url", "status", "final_video_path"}
+
+
 def test_cors_origins_include_runtime_configuration(monkeypatch):
     monkeypatch.setenv("CORS_ALLOW_ORIGINS", "http://172.27.2.90:3000, http://100.94.222.54:3000")
 

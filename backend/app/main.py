@@ -110,6 +110,11 @@ def current_task() -> dict | None:
     return database.get_current_task()
 
 
+@app.get("/api/tasks")
+def list_tasks(limit: int = 100) -> dict:
+    return {"tasks": database.list_tasks(limit=limit)}
+
+
 @app.get("/api/tasks/{task_id}")
 def task_detail(task_id: str) -> dict:
     task = database.get_task(task_id)
@@ -128,14 +133,18 @@ def task_log(task_id: str) -> str:
 
 
 @app.get("/api/tasks/{task_id}/artifact/final-video")
-def final_video(task_id: str) -> FileResponse:
+def final_video(task_id: str, download: bool = False) -> FileResponse:
     task = database.get_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found.")
     final_path = task.get("final_video_path")
     if not final_path or not Path(final_path).exists():
         raise HTTPException(status_code=404, detail="Final video is not available.")
-    return FileResponse(final_path, media_type="video/mp4", filename=Path(final_path).name)
+    name = Path(final_path).name
+    if download:
+        return FileResponse(final_path, media_type="video/mp4", filename=name)
+    headers = {"Content-Disposition": f'inline; filename="{name}"'}
+    return FileResponse(final_path, media_type="video/mp4", headers=headers)
 
 
 @app.get("/api/cookies/youtube")

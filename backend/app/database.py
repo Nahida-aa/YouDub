@@ -134,8 +134,19 @@ def has_active_task() -> bool:
 
 def latest_task_id() -> str | None:
     with connect() as conn:
-        row = conn.execute("SELECT id FROM tasks ORDER BY created_at DESC LIMIT 1").fetchone()
+        row = conn.execute("SELECT id FROM tasks ORDER BY created_at DESC, rowid DESC LIMIT 1").fetchone()
     return row["id"] if row else None
+
+
+def list_tasks(limit: int = 100) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT id, url, status, current_stage, final_video_path, error_message, "
+            "created_at, started_at, completed_at FROM tasks "
+            "ORDER BY created_at DESC, rowid DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def get_task(task_id: str) -> dict[str, Any] | None:

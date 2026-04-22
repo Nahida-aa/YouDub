@@ -1,6 +1,6 @@
 "use client"
 
-import { FormEvent, useEffect, useMemo, useState } from "react"
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react"
 import {
   CheckCircle2,
   Circle,
@@ -17,13 +17,16 @@ import {
 import {
   API_BASE,
   Task,
+  TaskSummary,
   createTask,
+  finalVideoDownloadUrl,
   finalVideoUrl,
   getCookieInfo,
-  getCurrentTask,
   getOpenAIModels,
   getOpenAISettings,
+  getTask,
   getYtdlpSettings,
+  listTasks,
   saveCookie,
   saveOpenAISettings,
   saveYtdlpSettings,
@@ -96,9 +99,26 @@ function stageIcon(status: string) {
   return <Circle className="size-4 text-muted-foreground" />
 }
 
+function isActive(status: string) {
+  return status === "queued" || status === "running"
+}
+
+function formatTime(value: string | null) {
+  if (!value) return ""
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString()
+}
+
+function shortUrl(url: string) {
+  return url.replace(/^https?:\/\/(www\.)?/, "")
+}
+
 export default function Home() {
   const [url, setUrl] = useState("")
-  const [task, setTask] = useState<Task | null>(null)
+  const [tasks, setTasks] = useState<TaskSummary[]>([])
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -111,23 +131,39 @@ export default function Home() {
   const [cookieDirty, setCookieDirty] = useState(false)
   const [apiKeyDirty, setApiKeyDirty] = useState(false)
 
-  async function refreshTask() {
-    const current = await getCurrentTask()
-    setTask(current)
-  }
+  const refreshTasks = useCallback(async () => {
+    const { tasks: list } = await listTasks()
+    setTasks(list)
+    setSelectedId((current) => current ?? list[0]?.id ?? null)
+  }, [])
 
   useEffect(() => {
-    const initial = window.setTimeout(() => {
-      refreshTask().catch((err) => setError(err.message))
-    }, 0)
+    refreshTasks().catch((err) => setError(err.message))
     const interval = window.setInterval(() => {
-      refreshTask().catch((err) => setError(err.message))
+      refreshTasks().catch((err) => setError(err.message))
     }, 2000)
+    return () => window.clearInterval(interval)
+  }, [refreshTasks])
+
+  useEffect(() => {
+    if (!selectedId) {
+      setSelectedTask(null)
+      return
+    }
+    let cancelled = false
+    const load = () =>
+      getTask(selectedId)
+        .then((task) => {
+          if (!cancelled) setSelectedTask(task)
+        })
+        .catch((err) => setError(err.message))
+    load()
+    const interval = window.setInterval(load, 2000)
     return () => {
-      window.clearTimeout(initial)
+      cancelled = true
       window.clearInterval(interval)
     }
-  }, [])
+  }, [selectedId])
 
   useEffect(() => {
     if (!settingsOpen) return
@@ -151,12 +187,12 @@ export default function Home() {
   }, [settingsOpen])
 
   const progress = useMemo(() => {
-    if (!task?.stages?.length) return 0
-    const completed = task.stages.filter((stage) => stage.status === "succeeded").length
-    return Math.round((completed / task.stages.length) * 100)
-  }, [task])
+    if (!selectedTask?.stages?.length) return 0
+    const completed = selectedTask.stages.filter((stage) => stage.status === "succeeded").length
+    return Math.round((completed / selectedTask.stages.length) * 100)
+  }, [selectedTask])
 
-  const isBusy = task?.status === "queued" || task?.status === "running"
+  const anyActive = tasks.some((t) => isActive(t.status))
 
   async function submitTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -164,8 +200,10 @@ export default function Home() {
     setSubmitting(true)
     try {
       const created = await createTask(url)
-      setTask(created)
+      setSelectedId(created.id)
+      setSelectedTask(created)
       setUrl("")
+      refreshTasks().catch(() => undefined)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create task")
     } finally {
@@ -376,47 +414,89 @@ export default function Home() {
           </Dialog>
         </header>
 
-        <section className="grid gap-5">
-          <Card>
-            <CardHeader>
-              <CardTitle>Convert video</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={submitTask} className="space-y-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="url">YouTube URL</Label>
-                  <Input
-                    id="url"
-                    value={url}
-                    onChange={(event) => setUrl(event.target.value)}
-                    placeholder="https://www.youtube.com/watch?v=..."
-                    disabled={isBusy}
-                  />
-                </div>
-                <Button type="submit" disabled={!url.trim() || submitting || isBusy}>
-                  <Play className="size-4" />
-                  {isBusy ? "Task running" : submitting ? "Submitting" : "Start conversion"}
-                </Button>
-              </form>
-
-              {error ? (
-                <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                  {error}
-                </div>
-              ) : null}
-
-              <Separator className="my-5" />
-
-              <div className="grid gap-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Backend</span>
-                  <code className="rounded bg-muted px-2 py-1 text-xs">{API_BASE}</code>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Mode</span>
-                  <Badge variant="outline">Single task, serial stages</Badge>
-                </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Convert video</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={submitTask} className="space-y-4">
+              <div className="grid gap-2">
+                <Label htmlFor="url">YouTube URL</Label>
+                <Input
+                  id="url"
+                  value={url}
+                  onChange={(event) => setUrl(event.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  disabled={anyActive}
+                />
               </div>
+              <Button type="submit" disabled={!url.trim() || submitting || anyActive}>
+                <Play className="size-4" />
+                {anyActive ? "Task running" : submitting ? "Submitting" : "Start conversion"}
+              </Button>
+            </form>
+
+            {error ? (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {error}
+              </div>
+            ) : null}
+
+            <Separator className="my-5" />
+
+            <div className="grid gap-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Backend</span>
+                <code className="rounded bg-muted px-2 py-1 text-xs">{API_BASE}</code>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Mode</span>
+                <Badge variant="outline">Single task, serial stages</Badge>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+          <Card className="lg:sticky lg:top-6 lg:self-start">
+            <CardHeader>
+              <CardTitle>History ({tasks.length})</CardTitle>
+            </CardHeader>
+            <CardContent className="px-0">
+              {tasks.length === 0 ? (
+                <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+                  No task yet.
+                </div>
+              ) : (
+                <ScrollArea className="max-h-[60dvh]">
+                  <ul className="flex flex-col">
+                    {tasks.map((item) => {
+                      const active = item.id === selectedId
+                      return (
+                        <li key={item.id}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedId(item.id)}
+                            className={`flex w-full flex-col gap-1 border-l-2 px-4 py-3 text-left text-sm transition-colors hover:bg-muted/60 ${
+                              active
+                                ? "border-l-[#fb7299] bg-muted/40"
+                                : "border-l-transparent"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <Badge variant={statusVariant(item.status)}>{item.status}</Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {formatTime(item.created_at)}
+                              </span>
+                            </div>
+                            <p className="truncate text-xs text-zinc-700">{shortUrl(item.url)}</p>
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </ScrollArea>
+              )}
             </CardContent>
           </Card>
 
@@ -424,22 +504,24 @@ export default function Home() {
             <CardHeader className="gap-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <CardTitle>Progress</CardTitle>
-                <Badge variant={statusVariant(task?.status)}>{task?.status || "idle"}</Badge>
+                <Badge variant={statusVariant(selectedTask?.status)}>
+                  {selectedTask?.status || "idle"}
+                </Badge>
               </div>
               <Progress value={progress} />
             </CardHeader>
             <CardContent>
-              {task ? (
+              {selectedTask ? (
                 <div className="space-y-4">
                   <div className="grid gap-1 text-sm">
-                    <p className="break-all font-medium">{task.url}</p>
-                    {task.session_path ? (
-                      <p className="break-all text-muted-foreground">{task.session_path}</p>
+                    <p className="break-all font-medium">{selectedTask.url}</p>
+                    {selectedTask.session_path ? (
+                      <p className="break-all text-muted-foreground">{selectedTask.session_path}</p>
                     ) : null}
                   </div>
 
                   <div className="grid gap-2">
-                    {task.stages.map((stage) => (
+                    {selectedTask.stages.map((stage) => (
                       <div
                         key={stage.name}
                         className="flex items-start gap-3 rounded-lg border border-border bg-background px-3 py-3"
@@ -458,16 +540,25 @@ export default function Home() {
                     ))}
                   </div>
 
-                  {task.error_message ? (
+                  {selectedTask.error_message ? (
                     <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                      {task.error_message}
+                      {selectedTask.error_message}
                     </div>
                   ) : null}
 
-                  {task.status === "succeeded" && task.final_video_path ? (
-                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3">
-                      <p className="break-all text-sm text-emerald-900">{task.final_video_path}</p>
-                      <Button className="mt-3" render={<a href={finalVideoUrl(task.id)} />}>
+                  {selectedTask.status === "succeeded" && selectedTask.final_video_path ? (
+                    <div className="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3">
+                      <p className="break-all text-sm text-emerald-900">
+                        {selectedTask.final_video_path}
+                      </p>
+                      <video
+                        key={selectedTask.id}
+                        src={finalVideoUrl(selectedTask.id)}
+                        controls
+                        preload="metadata"
+                        className="w-full rounded-md border border-emerald-200 bg-black"
+                      />
+                      <Button render={<a href={finalVideoDownloadUrl(selectedTask.id)} />}>
                         <Download className="size-4" />
                         Download final video
                       </Button>
@@ -476,12 +567,12 @@ export default function Home() {
                 </div>
               ) : (
                 <div className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
-                  No task yet.
+                  Select a task to see details.
                 </div>
               )}
             </CardContent>
           </Card>
-        </section>
+        </div>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
@@ -490,9 +581,9 @@ export default function Home() {
           </CardHeader>
           <CardContent>
             <ScrollArea className="h-40 rounded-lg border bg-zinc-950 p-3 text-xs text-zinc-100">
-              {task ? (
+              {selectedTask ? (
                 <pre className="whitespace-pre-wrap break-words">
-                  {task.stages
+                  {selectedTask.stages
                     .map((stage) => `[${stage.name}] ${stage.error_message || stage.last_message || stage.status}`)
                     .join("\n")}
                 </pre>
