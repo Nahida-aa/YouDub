@@ -1,6 +1,10 @@
+function defaultApiBase(): string {
+  if (typeof window === "undefined") return "http://localhost:8000"
+  return `${window.location.protocol}//${window.location.hostname}:8000`
+}
+
 export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
-  "http://localhost:8000"
+  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || defaultApiBase()
 
 export type StageStatus = "pending" | "running" | "succeeded" | "failed"
 export type TaskStatus = "queued" | "running" | "succeeded" | "failed"
@@ -19,6 +23,7 @@ export type TaskStage = {
 export type Task = {
   id: string
   url: string
+  title: string | null
   status: TaskStatus
   current_stage: string | null
   session_path: string | null
@@ -65,12 +70,16 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     const body = await response.json().catch(() => ({}))
     throw new Error(body.detail || `Request failed: ${response.status}`)
   }
+  if (response.status === 204) {
+    return undefined as T
+  }
   return response.json()
 }
 
 export type TaskSummary = {
   id: string
   url: string
+  title: string | null
   status: TaskStatus
   current_stage: string | null
   final_video_path: string | null
@@ -84,12 +93,24 @@ export function getCurrentTask() {
   return request<Task | null>("/api/tasks/current")
 }
 
+export async function getTaskLog(taskId: string): Promise<string> {
+  const response = await fetch(`${API_BASE}/api/tasks/${taskId}/log`, { cache: "no-store" })
+  if (!response.ok) {
+    throw new Error(`Failed to load log: ${response.status}`)
+  }
+  return response.text()
+}
+
 export function listTasks(limit = 100) {
   return request<{ tasks: TaskSummary[] }>(`/api/tasks?limit=${limit}`)
 }
 
 export function getTask(taskId: string) {
   return request<Task>(`/api/tasks/${taskId}`)
+}
+
+export function deleteTask(taskId: string) {
+  return request<void>(`/api/tasks/${taskId}`, { method: "DELETE" })
 }
 
 export function createTask(url: string) {

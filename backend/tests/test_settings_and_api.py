@@ -2,13 +2,24 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from backend.app import database
+from backend.app import config, database
 from backend.app import main
+from backend.app import worker
 
 
 def configure_tmp_runtime(monkeypatch, tmp_path):
+    workfolder = tmp_path / "workfolder"
+    workfolder.mkdir()
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
     monkeypatch.setattr(database, "DB_PATH", tmp_path / "test.sqlite")
     monkeypatch.setattr(main, "YOUTUBE_COOKIE_PATH", tmp_path / "cookies" / "youtube.txt")
+    monkeypatch.setattr(main, "WORKFOLDER", workfolder)
+    monkeypatch.setattr(config, "WORKFOLDER", workfolder)
+    monkeypatch.setattr(config, "LOG_DIR", log_dir)
+    monkeypatch.setattr(worker, "start", lambda runner: None)
+    monkeypatch.setattr(worker, "enqueue", lambda task_id: None)
+    monkeypatch.setattr(main.worker, "enqueue", lambda task_id: None)
     database.init_db()
 
 
@@ -53,9 +64,10 @@ def test_cookie_response_does_not_leak_content(monkeypatch, tmp_path):
     assert "secret-cookie-content" not in response.text
 
 
-def test_running_task_blocks_second_submit(monkeypatch, tmp_path):
+def test_task_id_is_video_id_and_dedupes_existing(monkeypatch, tmp_path):
     configure_tmp_runtime(monkeypatch, tmp_path)
-    monkeypatch.setattr(main, "run_task", lambda task_id: None)
+    enqueued: list[str] = []
+    monkeypatch.setattr(main.worker, "enqueue", lambda task_id: enqueued.append(task_id))
     client = TestClient(main.app)
     payload = {"url": "https://www.youtube.com/watch?v=abcdefghijk"}
 
@@ -63,7 +75,24 @@ def test_running_task_blocks_second_submit(monkeypatch, tmp_path):
     second = client.post("/api/tasks", json=payload)
 
     assert first.status_code == 201
-    assert second.status_code == 409
+    assert second.status_code == 201
+    assert first.json()["id"] == "abcdefghijk"
+    assert second.json()["id"] == "abcdefghijk"
+    assert enqueued == ["abcdefghijk"]
+
+
+def test_different_videos_create_separate_tasks(monkeypatch, tmp_path):
+    configure_tmp_runtime(monkeypatch, tmp_path)
+    enqueued: list[str] = []
+    monkeypatch.setattr(main.worker, "enqueue", lambda task_id: enqueued.append(task_id))
+    client = TestClient(main.app)
+
+    a = client.post("/api/tasks", json={"url": "https://www.youtube.com/watch?v=abcdefghijk"})
+    b = client.post("/api/tasks", json={"url": "https://youtu.be/zyxwvutsrqp"})
+
+    assert a.json()["id"] == "abcdefghijk"
+    assert b.json()["id"] == "zyxwvutsrqp"
+    assert enqueued == ["abcdefghijk", "zyxwvutsrqp"]
 
 
 def test_list_tasks_returns_history_newest_first(monkeypatch, tmp_path):
@@ -79,7 +108,63 @@ def test_list_tasks_returns_history_newest_first(monkeypatch, tmp_path):
     ids = [task["id"] for task in body["tasks"]]
     assert ids == [newer, older]
     assert "stages" not in body["tasks"][0]
-    assert set(body["tasks"][0].keys()) >= {"id", "url", "status", "final_video_path"}
+    assert set(body["tasks"][0].keys()) >= {"id", "url", "title", "status", "final_video_path"}
+
+
+def test_delete_task_removes_session_log_and_record(monkeypatch, tmp_path):
+    configure_tmp_runtime(monkeypatch, tmp_path)
+    task_id = database.create_task("https://www.youtube.com/watch?v=delvideoidx", task_id="delvideoidx")
+    session = config.WORKFOLDER / "uploader" / "title__delvideoidx"
+    (session / "media").mkdir(parents=True)
+    (session / "media" / "video_source.mp4").write_bytes(b"mp4")
+    database.update_task(task_id, session_path=str(session))
+    log_file = database.log_path(task_id)
+    log_file.write_text("hello", encoding="utf-8")
+
+    client = TestClient(main.app)
+    response = client.delete(f"/api/tasks/{task_id}")
+
+    assert response.status_code == 204
+    assert database.get_task(task_id) is None
+    assert not session.exists()
+    assert not log_file.exists()
+
+
+def test_delete_task_returns_404_for_unknown(monkeypatch, tmp_path):
+    configure_tmp_runtime(monkeypatch, tmp_path)
+    client = TestClient(main.app)
+
+    response = client.delete("/api/tasks/does-not-exist")
+
+    assert response.status_code == 404
+
+
+def test_delete_task_rejects_running_task(monkeypatch, tmp_path):
+    configure_tmp_runtime(monkeypatch, tmp_path)
+    task_id = database.create_task("https://www.youtube.com/watch?v=runningvidx", task_id="runningvidx")
+    database.update_task(task_id, status="running")
+
+    client = TestClient(main.app)
+    response = client.delete(f"/api/tasks/{task_id}")
+
+    assert response.status_code == 409
+    assert database.get_task(task_id) is not None
+
+
+def test_delete_task_skips_session_outside_workfolder(monkeypatch, tmp_path):
+    configure_tmp_runtime(monkeypatch, tmp_path)
+    task_id = database.create_task("https://www.youtube.com/watch?v=outsidevidx", task_id="outsidevidx")
+    outside = tmp_path / "elsewhere" / "session"
+    (outside / "media").mkdir(parents=True)
+    (outside / "media" / "video_source.mp4").write_bytes(b"mp4")
+    database.update_task(task_id, session_path=str(outside))
+
+    client = TestClient(main.app)
+    response = client.delete(f"/api/tasks/{task_id}")
+
+    assert response.status_code == 204
+    assert database.get_task(task_id) is None
+    assert outside.exists(), "Sessions outside WORKFOLDER must not be deleted."
 
 
 def test_cors_origins_include_runtime_configuration(monkeypatch):
