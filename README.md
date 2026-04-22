@@ -14,7 +14,7 @@ English README: [README.en.md](README.en.md)
 
 - 想把 YouTube 视频转换成中文配音的个人用户。
 - 想研究 AI 视频本地化流程的开发者。
-- 想基于 FunASR、VoxCPM、OpenAI API、Demucs、FFmpeg 做产品原型的人。
+- 想基于 Whisper、VoxCPM、OpenAI API、Demucs、FFmpeg 做产品原型的人。
 - 想参与开源共建，让跨语言内容传播更容易的人。
 
 ## 功能亮点
@@ -33,7 +33,8 @@ English README: [README.en.md](README.en.md)
 YouTube URL
   -> yt-dlp 下载
   -> Demucs 分离人声和背景音
-  -> FunASR / SenseVoice 识别字幕
+  -> Whisper 识别语音（含词级时间戳）
+  -> spaCy 重新分句并对齐时间戳
   -> OpenAI 兼容 API 逐句翻译
   -> VoxCPM2 生成中文配音
   -> FFmpeg 合成最终视频
@@ -74,6 +75,12 @@ python3.12 -m venv .venv
 
 ```bash
 npm --prefix apps/web install --registry=https://registry.npmmirror.com
+```
+
+下载 spaCy 英文模型（用于 ASR 重新分句）：
+
+```bash
+.venv/bin/python -m spacy download en_core_web_sm
 ```
 
 如果 Aliyun 某个 Python 包暂时不可用，再单独对那个包使用 Tsinghua 源重试。不要把 Tsinghua 配成全局 fallback。
@@ -131,13 +138,15 @@ http://localhost:3000
 
 API key 和 Cookie 会在页面中脱敏显示，后端不会把 Cookie 明文返回给前端。
 
+任务详情页底部提供 **Danger zone**，确认后会调用 `DELETE /api/tasks/{id}`，同时清理 SQLite 记录、运行日志以及 `workfolder/` 下整段会话目录。运行中的任务无法删除。
+
 ## 技术栈
 
 - Frontend: Next.js App Router, shadcn/ui, Lucide icons
 - Backend: FastAPI, SQLite
 - Download: yt-dlp
 - Source separation: Demucs
-- ASR: FunASR / SenseVoice
+- ASR: openai-whisper（默认 large-v3-turbo）+ spaCy 句子重分割
 - Translation: OpenAI-compatible Chat Completions API
 - TTS: VoxCPM2
 - Media: FFmpeg
