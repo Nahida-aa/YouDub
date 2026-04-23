@@ -4,141 +4,82 @@ import json
 
 import pytest
 
-spacy = pytest.importorskip("spacy")
-
 from backend.app.adapters import asr_sentence_fixer
 
 
-def _word(text: str, start: int, end: int) -> dict:
+def _utt(text: str, start: int, end: int) -> dict:
     return {"text": text, "start_time": start, "end_time": end}
 
 
-def _make_asr() -> dict:
-    return {
-        "audio_info": {"duration": 10000},
-        "result": {
-            "text": "Hello world. This is fine.",
-            "utterances": [
-                {
-                    "text": "Hello world. This is fine.",
-                    "start_time": 100,
-                    "end_time": 4000,
-                    "words": [
-                        _word("Hello", 100, 500),
-                        _word("world.", 600, 1200),
-                        _word("This", 1500, 1800),
-                        _word("is", 1900, 2100),
-                        _word("fine.", 2200, 2900),
-                    ],
-                }
-            ],
-        },
-    }
-
-
-def test_fix_asr_sentences_splits_using_word_timestamps(tmp_path, monkeypatch):
-    monkeypatch.setattr(asr_sentence_fixer, "_NLP_CACHE", {})
-    monkeypatch.setenv("SPACY_MODEL_EN", "__missing__")
-
+def _write_asr(tmp_path, utterances: list, duration: int = 10000, text: str = "") -> tuple:
     session = tmp_path / "session"
     (session / "metadata").mkdir(parents=True)
     asr_file = session / "metadata" / "asr.json"
-    asr_file.write_text(json.dumps(_make_asr()), encoding="utf-8")
+    payload = {
+        "audio_info": {"duration": duration},
+        "result": {"text": text, "utterances": utterances},
+    }
+    asr_file.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    return asr_file, session
+
+
+def test_fix_asr_sentences_passes_through_utterances(tmp_path):
+    utts = [_utt("Hello world.", 100, 1200), _utt("How are you?", 1500, 2800)]
+    asr_file, session = _write_asr(tmp_path, utts)
 
     fixed = asr_sentence_fixer.fix_asr_sentences(asr_file, session, start_pad=50, end_pad=100)
-    data = json.loads(fixed.read_text(encoding="utf-8"))
-    utts = data["result"]["utterances"]
+    out = json.loads(fixed.read_text(encoding="utf-8"))["result"]["utterances"]
 
-    assert len(utts) == 2
-    assert utts[0]["text"].startswith("Hello")
-    assert utts[1]["text"].startswith("This")
-    assert utts[0]["start_time"] >= 0
-    assert utts[0]["end_time"] >= utts[0]["start_time"]
-    assert utts[1]["start_time"] > utts[0]["end_time"]
+    assert [u["text"] for u in out] == ["Hello world.", "How are you?"]
 
 
-def test_split_sentences_zh_uses_chinese_punctuation():
-    out = asr_sentence_fixer._split_sentences("你好，世界。今天天气真好！是吗？嗯", "zh")
-    assert out == ["你好，世界。", "今天天气真好！", "是吗？", "嗯"]
+def test_fix_asr_sentences_drops_empty_text(tmp_path):
+    utts = [_utt("Hello.", 0, 500), _utt("   ", 600, 800), _utt("World.", 900, 1500)]
+    asr_file, session = _write_asr(tmp_path, utts)
+
+    fixed = asr_sentence_fixer.fix_asr_sentences(asr_file, session)
+    out = json.loads(fixed.read_text(encoding="utf-8"))["result"]["utterances"]
+
+    assert [u["text"] for u in out] == ["Hello.", "World."]
 
 
-def test_split_sentences_zh_keeps_trailing_quotes():
-    out = asr_sentence_fixer._split_sentences('他说：“你好！”她回答：“好。”最后补一句“走吧”？', "zh")
-    assert out == ['他说：“你好！”', '她回答：“好。”', '最后补一句“走吧”？']
+def test_fix_asr_sentences_applies_padding_within_gap(tmp_path):
+    utts = [_utt("a", 1000, 2000), _utt("b", 3000, 4000)]
+    asr_file, session = _write_asr(tmp_path, utts, duration=5000)
+
+    fixed = asr_sentence_fixer.fix_asr_sentences(asr_file, session, start_pad=100, end_pad=300)
+    out = json.loads(fixed.read_text(encoding="utf-8"))["result"]["utterances"]
+
+    assert out[0]["start_time"] == 900
+    assert out[0]["end_time"] == 2300
+    assert out[1]["start_time"] == 2900
+    assert out[1]["end_time"] == 4300
 
 
-def test_split_sentences_zh_keeps_trailing_brackets():
-    out = asr_sentence_fixer._split_sentences("第一句。（旁白）第二句！）第三句？》尾巴", "zh")
-    assert out == ["第一句。", "（旁白）第二句！）", "第三句？》", "尾巴"]
+def test_fix_asr_sentences_clamps_to_duration(tmp_path):
+    utts = [_utt("only", 100, 4900)]
+    asr_file, session = _write_asr(tmp_path, utts, duration=5000)
+
+    fixed = asr_sentence_fixer.fix_asr_sentences(asr_file, session, start_pad=200, end_pad=500)
+    out = json.loads(fixed.read_text(encoding="utf-8"))["result"]["utterances"]
+
+    assert out[0]["start_time"] == 0  # 100 - 200 -> clamp 0
+    assert out[0]["end_time"] == 5000
 
 
-def test_split_sentences_zh_skips_spacy(monkeypatch):
-    def boom(_):
-        raise AssertionError("should not load spacy for zh")
-
-    monkeypatch.setattr(asr_sentence_fixer, "_load_nlp", boom)
-    assert asr_sentence_fixer._split_sentences("一句。", "zh") == ["一句。"]
-
-
-def test_fix_asr_sentences_handles_chinese_with_punctuation(tmp_path):
-    chinese_words = [_word(c, i * 200, (i + 1) * 200) for i, c in enumerate("你好世界今天天气真好")]
-    asr = {
-        "audio_info": {"duration": 5000},
-        "result": {
-            "text": "你好世界。今天天气真好。",
-            "utterances": [{
-                "text": "你好世界。今天天气真好。",
-                "start_time": 0,
-                "end_time": 2000,
-                "words": chinese_words,
-            }],
-        },
-    }
-    session = tmp_path / "session"
-    (session / "metadata").mkdir(parents=True)
-    asr_file = session / "metadata" / "asr.json"
-    asr_file.write_text(json.dumps(asr, ensure_ascii=False), encoding="utf-8")
-
-    fixed = asr_sentence_fixer.fix_asr_sentences(asr_file, session, language="zh")
-    utts = json.loads(fixed.read_text(encoding="utf-8"))["result"]["utterances"]
-    assert [u["text"] for u in utts] == ["你好世界。", "今天天气真好。"]
-
-
-def test_fix_asr_sentences_falls_back_to_segments_when_no_punct(tmp_path):
-    asr = {
-        "audio_info": {"duration": 5000},
-        "result": {
-            "text": "你好世界今天天气真好",
-            "utterances": [
-                {"text": "你好世界", "start_time": 0, "end_time": 800, "words": []},
-                {"text": "今天天气真好", "start_time": 1000, "end_time": 2000, "words": []},
-            ],
-        },
-    }
-    session = tmp_path / "session"
-    (session / "metadata").mkdir(parents=True)
-    asr_file = session / "metadata" / "asr.json"
-    asr_file.write_text(json.dumps(asr, ensure_ascii=False), encoding="utf-8")
-
-    fixed = asr_sentence_fixer.fix_asr_sentences(asr_file, session, language="zh")
-    utts = json.loads(fixed.read_text(encoding="utf-8"))["result"]["utterances"]
-    assert [u["text"] for u in utts] == ["你好世界", "今天天气真好"]
-
-
-def test_fix_asr_sentences_raises_without_words(tmp_path, monkeypatch):
-    monkeypatch.setattr(asr_sentence_fixer, "_NLP_CACHE", {})
-    monkeypatch.setenv("SPACY_MODEL_EN", "__missing__")
-
-    session = tmp_path / "session"
-    (session / "metadata").mkdir(parents=True)
-    asr_file = session / "metadata" / "asr.json"
-    asr_file.write_text(
-        json.dumps({
-            "audio_info": {"duration": 1000},
-            "result": {"text": "Hello.", "utterances": [{"text": "Hello.", "start_time": 0, "end_time": 100}]},
-        }),
-        encoding="utf-8",
-    )
+def test_fix_asr_sentences_raises_when_empty(tmp_path):
+    asr_file, session = _write_asr(tmp_path, [_utt("  ", 0, 100)])
 
     with pytest.raises(RuntimeError):
         asr_sentence_fixer.fix_asr_sentences(asr_file, session)
+
+
+def test_fix_asr_sentences_reuses_cache(tmp_path):
+    utts = [_utt("hi", 0, 500)]
+    asr_file, session = _write_asr(tmp_path, utts)
+
+    first = asr_sentence_fixer.fix_asr_sentences(asr_file, session)
+    first.write_text('{"already": true}', encoding="utf-8")
+    second = asr_sentence_fixer.fix_asr_sentences(asr_file, session)
+
+    assert json.loads(second.read_text(encoding="utf-8")) == {"already": True}
