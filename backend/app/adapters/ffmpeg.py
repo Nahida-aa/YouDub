@@ -19,6 +19,11 @@ SUBTITLE_FONTS = {
     "en": "Arial",
 }
 
+SUBTITLE_FONT_SIZES = {
+    "zh": {"portrait": 12, "landscape": 24},
+    "en": {"portrait": 9, "landscape": 18},
+}
+
 
 def _subtitle_style(font: str, size: int, margin_v: int) -> str:
     return (
@@ -219,16 +224,16 @@ def get_video_orientation(video_file: Path) -> str:
     return "portrait" if height > width else "landscape"
 
 
-def subtitle_style_for_orientation(orientation: str, font: str) -> str:
-    if orientation == "portrait":
-        return _subtitle_style(font, size=12, margin_v=70)
-    return _subtitle_style(font, size=24, margin_v=5)
+def subtitle_style_for_orientation(orientation: str, font: str, lang: str = "zh") -> str:
+    sizes = SUBTITLE_FONT_SIZES.get(lang, SUBTITLE_FONT_SIZES["zh"])
+    margin_v = 70 if orientation == "portrait" else 5
+    return _subtitle_style(font, size=sizes[orientation], margin_v=margin_v)
 
 
 def subtitle_filter(video_file: Path, subtitle_file: Path) -> str:
     lang = subtitle_file.stem.rsplit(".", 1)[-1]
     font = SUBTITLE_FONTS.get(lang, "Arial")
-    style = subtitle_style_for_orientation(get_video_orientation(video_file), font)
+    style = subtitle_style_for_orientation(get_video_orientation(video_file), font, lang)
     sub_path = subtitle_file.as_posix()
     return f"subtitles=filename='{sub_path}':force_style='{style}'"
 
