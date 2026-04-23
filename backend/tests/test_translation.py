@@ -116,10 +116,7 @@ def test_translate_asr_invokes_translate_batch_with_all_texts_at_once(tmp_path, 
 
 
 def test_translate_batch_replaces_em_dash_for_zh_target(monkeypatch):
-    def fake_call_json(client, model, system, user):
-        return {"items": [{"index": 0, "dst": "你好——世界"}]}
-
-    monkeypatch.setattr(openai_translate, "_call_json", fake_call_json)
+    monkeypatch.setattr(openai_translate, "_call_json", lambda *a, **kw: {"dst": "你好——世界"})
     monkeypatch.setattr(openai_translate, "_client", lambda *a, **kw: object())
 
     out = openai_translate.translate_batch(
@@ -130,10 +127,9 @@ def test_translate_batch_replaces_em_dash_for_zh_target(monkeypatch):
 
 
 def test_translate_batch_does_not_replace_em_dash_for_en_target(monkeypatch):
-    def fake_call_json(client, model, system, user):
-        return {"items": [{"index": 0, "dst": "He said—wait—and left."}]}
-
-    monkeypatch.setattr(openai_translate, "_call_json", fake_call_json)
+    monkeypatch.setattr(
+        openai_translate, "_call_json", lambda *a, **kw: {"dst": "He said—wait—and left."}
+    )
     monkeypatch.setattr(openai_translate, "_client", lambda *a, **kw: object())
 
     out = openai_translate.translate_batch(
@@ -143,52 +139,49 @@ def test_translate_batch_does_not_replace_em_dash_for_en_target(monkeypatch):
     assert out == ["He said—wait—and left."]
 
 
-def test_translate_batch_retries_on_count_mismatch(monkeypatch):
+def test_translate_batch_uses_shared_system_prompt(monkeypatch):
+    captured: list[str] = []
+    lock = __import__("threading").Lock()
+
+    def fake_call_json(client, model, system, user):
+        with lock:
+            captured.append(system)
+        return {"dst": f"dst:{user}"}
+
+    monkeypatch.setattr(openai_translate, "_call_json", fake_call_json)
+    monkeypatch.setattr(openai_translate, "_client", lambda *a, **kw: object())
+
+    texts = [f"s{i}" for i in range(5)]
+    out = openai_translate.translate_batch(
+        texts, BB_SOURCE, {}, PreprocessResponse(),
+        base_url="u", api_key="k", model="m", concurrency=4,
+    )
+    assert out == [f"dst:s{i}" for i in range(5)]
+    assert len(set(captured)) == 1, "system prompt must be identical across calls for prompt cache"
+
+
+def test_translate_sentence_retries_on_empty_dst(monkeypatch):
     calls = {"n": 0}
 
     def fake_call_json(client, model, system, user):
         calls["n"] += 1
-        if calls["n"] == 1:
-            return {"items": [{"index": 0, "dst": "only one"}]}
-        return {"items": [{"index": 0, "dst": "a"}, {"index": 1, "dst": "b"}]}
+        return {"dst": ""} if calls["n"] == 1 else {"dst": "ok"}
 
     monkeypatch.setattr(openai_translate, "_call_json", fake_call_json)
-    monkeypatch.setattr(openai_translate, "_client", lambda *a, **kw: object())
 
-    out = openai_translate.translate_batch(
-        ["x", "y"], BB_SOURCE, {}, PreprocessResponse(),
-        base_url="u", api_key="k", model="m",
-    )
-    assert out == ["a", "b"]
+    out = openai_translate.translate_sentence("hello", "en", object(), "m", "sys")
+    assert out == "ok"
     assert calls["n"] == 2
 
 
-def test_translate_batch_sorts_by_index(monkeypatch):
+def test_translate_sentence_raises_after_retries(monkeypatch):
     def fake_call_json(client, model, system, user):
-        return {"items": [{"index": 1, "dst": "B"}, {"index": 0, "dst": "A"}]}
+        raise ValueError("boom")
 
     monkeypatch.setattr(openai_translate, "_call_json", fake_call_json)
-    monkeypatch.setattr(openai_translate, "_client", lambda *a, **kw: object())
 
-    out = openai_translate.translate_batch(
-        ["a", "b"], BB_SOURCE, {}, PreprocessResponse(),
-        base_url="u", api_key="k", model="m",
-    )
-    assert out == ["A", "B"]
-
-
-def test_translate_batch_raises_after_exhausting_retries(monkeypatch):
-    def fake_call_json(client, model, system, user):
-        return {"items": []}
-
-    monkeypatch.setattr(openai_translate, "_call_json", fake_call_json)
-    monkeypatch.setattr(openai_translate, "_client", lambda *a, **kw: object())
-
-    with pytest.raises(RuntimeError, match="translate_batch failed"):
-        openai_translate.translate_batch(
-            ["a"], BB_SOURCE, {}, PreprocessResponse(),
-            base_url="u", api_key="k", model="m",
-        )
+    with pytest.raises(RuntimeError, match="translate_sentence failed"):
+        openai_translate.translate_sentence("x", "en", object(), "m", "sys")
 
 
 def test_preprocess_returns_empty_when_repeatedly_invalid(monkeypatch):

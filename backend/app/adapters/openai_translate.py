@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -16,8 +17,9 @@ log = logging.getLogger(__name__)
 
 API_SETTING_KEYS = ("base_url", "api_key", "model")
 PREPROCESS_RETRY = 2
-TRANSLATE_RETRY = 3
+TRANSLATE_RETRY = 2
 DESCRIPTION_LIMIT = 500
+DEFAULT_CONCURRENCY = 50
 
 
 class HotwordItem(BaseModel):
@@ -37,12 +39,7 @@ class PreprocessResponse(BaseModel):
 
 
 class TranslationItem(BaseModel):
-    index: int
     dst: str
-
-
-class TranslationResponse(BaseModel):
-    items: list[TranslationItem]
 
 
 def list_models(*, base_url: str, api_key: str) -> list[str]:
@@ -76,8 +73,15 @@ def _extract_json(raw: str) -> dict[str, Any]:
         pass
     match = _JSON_BLOCK_RE.search(raw)
     if not match:
-        raise json.JSONDecodeError("no JSON object found", raw, 0)
-    return json.loads(match.group(0))
+        raise json.JSONDecodeError(f"no JSON object found; raw[:300]={raw[:300]!r}", raw, 0)
+    try:
+        return json.loads(match.group(0))
+    except json.JSONDecodeError as exc:
+        raise json.JSONDecodeError(
+            f"{exc.msg}; len={len(raw)}; raw[:300]={raw[:300]!r}; raw[-200:]={raw[-200:]!r}",
+            raw,
+            exc.pos,
+        ) from None
 
 
 def _call_json(client: OpenAI, model: str, system: str, user: str) -> dict[str, Any]:
@@ -155,6 +159,27 @@ def _post_process(text: str, target_language: str) -> str:
     return cleaned
 
 
+def translate_sentence(
+    text: str,
+    target_language: str,
+    client: OpenAI,
+    model: str,
+    system: str,
+) -> str:
+    last_error: Exception | None = None
+    for attempt in range(TRANSLATE_RETRY):
+        try:
+            data = _call_json(client, model, system, text)
+            item = TranslationItem.model_validate(data)
+            if not item.dst.strip():
+                raise ValueError("empty dst")
+            return _post_process(item.dst, target_language)
+        except (json.JSONDecodeError, ValidationError, ValueError) as exc:
+            last_error = exc
+            log.warning("translate attempt %d failed for %r: %s", attempt + 1, text[:60], exc)
+    raise RuntimeError(f"translate_sentence failed after {TRANSLATE_RETRY} attempts: {last_error}")
+
+
 def translate_batch(
     texts: list[str],
     source: SourceConfig,
@@ -164,29 +189,20 @@ def translate_batch(
     base_url: str,
     api_key: str,
     model: str,
+    concurrency: int = DEFAULT_CONCURRENCY,
 ) -> list[str]:
     if not texts:
         return []
-    user = json.dumps(
-        {"items": [{"index": i, "src": t} for i, t in enumerate(texts)]},
-        ensure_ascii=False,
-        indent=2,
-    )
     system = _translate_system(source, meta, pre)
     client = _client(base_url, api_key)
-    last_error: Exception | None = None
-    for attempt in range(TRANSLATE_RETRY):
-        try:
-            data = _call_json(client, model, system, user)
-            parsed = TranslationResponse.model_validate(data)
-            if len(parsed.items) != len(texts):
-                raise ValueError(f"got {len(parsed.items)} items, expected {len(texts)}")
-            ordered = sorted(parsed.items, key=lambda x: x.index)
-            return [_post_process(item.dst, source.target_language) for item in ordered]
-        except (json.JSONDecodeError, ValidationError, ValueError) as exc:
-            last_error = exc
-            log.warning("translate batch attempt %d failed: %s", attempt + 1, exc)
-    raise RuntimeError(f"translate_batch failed after {TRANSLATE_RETRY} attempts: {last_error}")
+    log.info(
+        "translate_batch: %d sentences, concurrency=%d", len(texts), concurrency,
+    )
+    with ThreadPoolExecutor(max_workers=max(1, concurrency)) as pool:
+        return list(pool.map(
+            lambda t: translate_sentence(t, source.target_language, client, model, system),
+            texts,
+        ))
 
 
 def _read_meta(session: Path) -> dict[str, Any]:
@@ -210,6 +226,11 @@ def _full_text(data: dict[str, Any], texts: list[str]) -> str:
     return " ".join(texts)
 
 
+def _concurrency_from(settings: dict[str, str]) -> int:
+    raw = str(settings.get("translate_concurrency") or DEFAULT_CONCURRENCY).strip()
+    return max(1, int(raw or DEFAULT_CONCURRENCY))
+
+
 def translate_asr(
     asr_file: Path,
     session: Path,
@@ -228,7 +249,9 @@ def translate_asr(
 
     api = {key: settings[key] for key in API_SETTING_KEYS if key in settings}
     pre = preprocess(full_text, meta, source, **api)
-    dst_list = translate_batch(texts, source, meta, pre, **api)
+    dst_list = translate_batch(
+        texts, source, meta, pre, **api, concurrency=_concurrency_from(settings)
+    )
 
     translation = [
         {
