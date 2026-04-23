@@ -26,13 +26,23 @@ def test_video_orientation_defaults_to_landscape_when_probe_fails(monkeypatch):
 
 
 def test_subtitle_styles_match_backend_orientation_rules():
-    portrait = ffmpeg.subtitle_style_for_orientation("portrait")
-    landscape = ffmpeg.subtitle_style_for_orientation("landscape")
+    portrait = ffmpeg.subtitle_style_for_orientation("portrait", "Arial")
+    landscape = ffmpeg.subtitle_style_for_orientation("landscape", "Arial")
 
     assert "FontSize=12" in portrait
     assert "MarginV=70" in portrait
     assert "FontSize=24" in landscape
     assert "MarginV=5" in landscape
+
+
+def test_subtitle_filter_picks_chinese_font_for_zh_srt(monkeypatch, tmp_path):
+    monkeypatch.setattr(ffmpeg, "get_video_orientation", lambda _: "landscape")
+    sub_zh = tmp_path / "subtitles.zh.srt"
+    sub_zh.write_text("", encoding="utf-8")
+    assert "FontName=Noto Sans CJK SC" in ffmpeg.subtitle_filter(tmp_path / "v.mp4", sub_zh)
+    sub_en = tmp_path / "subtitles.en.srt"
+    sub_en.write_text("", encoding="utf-8")
+    assert "FontName=Arial" in ffmpeg.subtitle_filter(tmp_path / "v.mp4", sub_en)
 
 
 def test_merge_video_burns_portrait_subtitles(monkeypatch, tmp_path):

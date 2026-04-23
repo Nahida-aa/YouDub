@@ -5,9 +5,13 @@ import os
 from pathlib import Path
 from typing import Any
 
+import time
+
+import requests
 import yt_dlp
 
 from ..sanitize import sanitize_text
+from ..sources import SourceConfig
 from ..youtube import extract_video_id
 
 
@@ -18,6 +22,28 @@ FORMAT_CANDIDATES = (
     "best",
 )
 
+DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
+
+
+def _bootstrap_bilibili_cookie(cookie_path: Path) -> None:
+    response = requests.get(
+        "https://www.bilibili.com/",
+        headers={"User-Agent": DEFAULT_USER_AGENT, "Referer": "https://www.bilibili.com/"},
+        timeout=10,
+    )
+    response.raise_for_status()
+    expires = int(time.time()) + 3600 * 24 * 365
+    lines = ["# Netscape HTTP Cookie File", ""]
+    cookies = dict(response.cookies)
+    cookies.setdefault("SESSDATA", "anonymous_for_webpage_playinfo")
+    for name, value in cookies.items():
+        lines.append("\t".join([".bilibili.com", "TRUE", "/", "FALSE", str(expires), name, value]))
+    cookie_path.parent.mkdir(parents=True, exist_ok=True)
+    cookie_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
 
 def _proxy_url(proxy_port: str = "") -> str:
     if proxy_port.strip():
@@ -25,15 +51,29 @@ def _proxy_url(proxy_port: str = "") -> str:
     return os.getenv("HTTP_PROXY") or os.getenv("http_proxy") or ""
 
 
-def _ydl_base(cookie_path: Path, proxy_port: str = "") -> dict[str, Any]:
+def _ensure_cookie(source: SourceConfig) -> None:
+    cookie_path = source.cookie_path
+    if not cookie_path or source.name != "bilibili":
+        return
+    if cookie_path.exists() and cookie_path.stat().st_size > 0:
+        return
+    _bootstrap_bilibili_cookie(cookie_path)
+
+
+def _ydl_base(source: SourceConfig, proxy_port: str = "") -> dict[str, Any]:
     opts: dict[str, Any] = {
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
         "js_runtimes": {"node": {}},
+        "http_headers": {"User-Agent": DEFAULT_USER_AGENT},
     }
-    if cookie_path.exists() and cookie_path.stat().st_size > 0:
+    cookie_path = source.cookie_path
+    if cookie_path and cookie_path.exists() and cookie_path.stat().st_size > 0:
         opts["cookiefile"] = str(cookie_path)
+    if not source.use_proxy:
+        opts["proxy"] = ""
+        return opts
     proxy = _proxy_url(proxy_port)
     if proxy:
         opts["proxy"] = proxy
@@ -59,11 +99,13 @@ def _remove_partial_outputs(video_file: Path) -> None:
             candidate.unlink(missing_ok=True)
 
 
-def _download_with_format_candidates(url: str, video_file: Path, cookie_path: Path, proxy_port: str) -> None:
+def _download_with_format_candidates(
+    url: str, video_file: Path, source: SourceConfig, proxy_port: str
+) -> None:
     last_error: Exception | None = None
     for format_selector in FORMAT_CANDIDATES:
         download_opts = {
-            **_ydl_base(cookie_path, proxy_port),
+            **_ydl_base(source, proxy_port),
             "format": format_selector,
             "merge_output_format": "mp4",
             "outtmpl": str(video_file),
@@ -83,9 +125,12 @@ def _download_with_format_candidates(url: str, video_file: Path, cookie_path: Pa
         raise last_error
 
 
-def download_youtube(url: str, workfolder: Path, cookie_path: Path, proxy_port: str = "") -> tuple[Path, dict[str, Any]]:
+def download_video(
+    url: str, workfolder: Path, source: SourceConfig, proxy_port: str = ""
+) -> tuple[Path, dict[str, Any]]:
     video_id = extract_video_id(url)
-    info_opts = _ydl_base(cookie_path, proxy_port)
+    _ensure_cookie(source)
+    info_opts = _ydl_base(source, proxy_port)
     with yt_dlp.YoutubeDL(info_opts) as ydl:
         info = ydl.extract_info(url, download=False)
 
@@ -105,7 +150,7 @@ def download_youtube(url: str, workfolder: Path, cookie_path: Path, proxy_port: 
     if video_file.exists() and video_file.stat().st_size > 0:
         return session, info
 
-    _download_with_format_candidates(url, video_file, cookie_path, proxy_port)
+    _download_with_format_candidates(url, video_file, source, proxy_port)
 
     if not video_file.exists() or video_file.stat().st_size == 0:
         raise RuntimeError("yt-dlp finished without producing media/video_source.mp4")

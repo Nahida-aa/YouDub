@@ -45,7 +45,8 @@ function activeCount(tasks: TaskSummary[]) {
 
 export default function Home() {
   const router = useRouter()
-  const [url, setUrl] = useState("")
+  const [youtubeUrl, setYoutubeUrl] = useState("")
+  const [bilibiliUrl, setBilibiliUrl] = useState("")
   const [tasks, setTasks] = useState<TaskSummary[]>([])
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
@@ -66,10 +67,13 @@ export default function Home() {
   async function submitTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError("")
+    const submittedUrl = youtubeUrl.trim() || bilibiliUrl.trim()
+    if (!submittedUrl) return
     setSubmitting(true)
     try {
-      const created = await createTask(url)
-      setUrl("")
+      const created = await createTask(submittedUrl)
+      setYoutubeUrl("")
+      setBilibiliUrl("")
       refreshTasks().catch(() => undefined)
       router.push(`/tasks/${created.id}`)
     } catch (err) {
@@ -80,6 +84,7 @@ export default function Home() {
   }
 
   const queued = activeCount(tasks)
+  const canSubmit = Boolean((youtubeUrl.trim() || bilibiliUrl.trim()) && !submitting)
 
   return (
     <main className="min-h-screen bg-[linear-gradient(135deg,#fff5f5_0%,#f2fbff_48%,#fff4fa_100%)] text-foreground">
@@ -91,26 +96,40 @@ export default function Home() {
             <CardTitle>Create new task</CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={submitTask} className="space-y-3">
-              <Label htmlFor="url">YouTube URL</Label>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <form onSubmit={submitTask} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="youtube-url">YouTube URL (English → Chinese)</Label>
                 <Input
-                  id="url"
-                  value={url}
-                  onChange={(event) => setUrl(event.target.value)}
+                  id="youtube-url"
+                  value={youtubeUrl}
+                  onChange={(event) => setYoutubeUrl(event.target.value)}
                   placeholder="https://www.youtube.com/watch?v=..."
-                  className="sm:flex-1"
+                  disabled={Boolean(bilibiliUrl.trim())}
                 />
-                <Button type="submit" disabled={!url.trim() || submitting} className="sm:shrink-0">
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="bilibili-url">Bilibili URL (Chinese → English)</Label>
+                <Input
+                  id="bilibili-url"
+                  value={bilibiliUrl}
+                  onChange={(event) => setBilibiliUrl(event.target.value)}
+                  placeholder="https://www.bilibili.com/video/BV..."
+                  disabled={Boolean(youtubeUrl.trim())}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                {queued > 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    {queued} task{queued > 1 ? "s" : ""} queued / running
+                  </p>
+                ) : (
+                  <span />
+                )}
+                <Button type="submit" disabled={!canSubmit}>
                   <Play className="size-4" />
                   {submitting ? "Submitting" : "Create task"}
                 </Button>
               </div>
-              {queued > 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  {queued} task{queued > 1 ? "s" : ""} queued / running
-                </p>
-              ) : null}
             </form>
 
             {error ? (
@@ -128,7 +147,7 @@ export default function Home() {
           <CardContent className="px-0">
             {tasks.length === 0 ? (
               <div className="px-6 py-12 text-center text-sm text-muted-foreground">
-                No tasks yet. Submit a YouTube URL above to start.
+                No tasks yet. Submit a YouTube or Bilibili URL above to start.
               </div>
             ) : (
               <ScrollArea className="max-h-[70dvh]">

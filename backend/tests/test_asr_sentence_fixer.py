@@ -37,8 +37,8 @@ def _make_asr() -> dict:
 
 
 def test_fix_asr_sentences_splits_using_word_timestamps(tmp_path, monkeypatch):
-    monkeypatch.setattr(asr_sentence_fixer, "_NLP", None)
-    monkeypatch.setenv("SPACY_MODEL", "__missing__")
+    monkeypatch.setattr(asr_sentence_fixer, "_NLP_CACHE", {})
+    monkeypatch.setenv("SPACY_MODEL_EN", "__missing__")
 
     session = tmp_path / "session"
     (session / "metadata").mkdir(parents=True)
@@ -57,9 +57,77 @@ def test_fix_asr_sentences_splits_using_word_timestamps(tmp_path, monkeypatch):
     assert utts[1]["start_time"] > utts[0]["end_time"]
 
 
+def test_split_sentences_zh_uses_chinese_punctuation():
+    out = asr_sentence_fixer._split_sentences("你好，世界。今天天气真好！是吗？嗯", "zh")
+    assert out == ["你好，世界。", "今天天气真好！", "是吗？", "嗯"]
+
+
+def test_split_sentences_zh_keeps_trailing_quotes():
+    out = asr_sentence_fixer._split_sentences('他说：“你好！”她回答：“好。”最后补一句“走吧”？', "zh")
+    assert out == ['他说：“你好！”', '她回答：“好。”', '最后补一句“走吧”？']
+
+
+def test_split_sentences_zh_keeps_trailing_brackets():
+    out = asr_sentence_fixer._split_sentences("第一句。（旁白）第二句！）第三句？》尾巴", "zh")
+    assert out == ["第一句。", "（旁白）第二句！）", "第三句？》", "尾巴"]
+
+
+def test_split_sentences_zh_skips_spacy(monkeypatch):
+    def boom(_):
+        raise AssertionError("should not load spacy for zh")
+
+    monkeypatch.setattr(asr_sentence_fixer, "_load_nlp", boom)
+    assert asr_sentence_fixer._split_sentences("一句。", "zh") == ["一句。"]
+
+
+def test_fix_asr_sentences_handles_chinese_with_punctuation(tmp_path):
+    chinese_words = [_word(c, i * 200, (i + 1) * 200) for i, c in enumerate("你好世界今天天气真好")]
+    asr = {
+        "audio_info": {"duration": 5000},
+        "result": {
+            "text": "你好世界。今天天气真好。",
+            "utterances": [{
+                "text": "你好世界。今天天气真好。",
+                "start_time": 0,
+                "end_time": 2000,
+                "words": chinese_words,
+            }],
+        },
+    }
+    session = tmp_path / "session"
+    (session / "metadata").mkdir(parents=True)
+    asr_file = session / "metadata" / "asr.json"
+    asr_file.write_text(json.dumps(asr, ensure_ascii=False), encoding="utf-8")
+
+    fixed = asr_sentence_fixer.fix_asr_sentences(asr_file, session, language="zh")
+    utts = json.loads(fixed.read_text(encoding="utf-8"))["result"]["utterances"]
+    assert [u["text"] for u in utts] == ["你好世界。", "今天天气真好。"]
+
+
+def test_fix_asr_sentences_falls_back_to_segments_when_no_punct(tmp_path):
+    asr = {
+        "audio_info": {"duration": 5000},
+        "result": {
+            "text": "你好世界今天天气真好",
+            "utterances": [
+                {"text": "你好世界", "start_time": 0, "end_time": 800, "words": []},
+                {"text": "今天天气真好", "start_time": 1000, "end_time": 2000, "words": []},
+            ],
+        },
+    }
+    session = tmp_path / "session"
+    (session / "metadata").mkdir(parents=True)
+    asr_file = session / "metadata" / "asr.json"
+    asr_file.write_text(json.dumps(asr, ensure_ascii=False), encoding="utf-8")
+
+    fixed = asr_sentence_fixer.fix_asr_sentences(asr_file, session, language="zh")
+    utts = json.loads(fixed.read_text(encoding="utf-8"))["result"]["utterances"]
+    assert [u["text"] for u in utts] == ["你好世界", "今天天气真好"]
+
+
 def test_fix_asr_sentences_raises_without_words(tmp_path, monkeypatch):
-    monkeypatch.setattr(asr_sentence_fixer, "_NLP", None)
-    monkeypatch.setenv("SPACY_MODEL", "__missing__")
+    monkeypatch.setattr(asr_sentence_fixer, "_NLP_CACHE", {})
+    monkeypatch.setenv("SPACY_MODEL_EN", "__missing__")
 
     session = tmp_path / "session"
     (session / "metadata").mkdir(parents=True)
@@ -67,7 +135,7 @@ def test_fix_asr_sentences_raises_without_words(tmp_path, monkeypatch):
     asr_file.write_text(
         json.dumps({
             "audio_info": {"duration": 1000},
-            "result": {"text": "x", "utterances": [{"text": "x", "start_time": 0, "end_time": 100}]},
+            "result": {"text": "Hello.", "utterances": [{"text": "Hello.", "start_time": 0, "end_time": 100}]},
         }),
         encoding="utf-8",
     )

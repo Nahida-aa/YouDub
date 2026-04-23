@@ -63,7 +63,7 @@ def generate_tts(translation_file: Path, vocals_dir: Path, session: Path) -> Pat
         if not reference.exists() or len(AudioSegment.from_file(reference)) < min_reference_ms:
             reference = fallback
         wav = model.generate(
-            text=item["zh"],
+            text=item.get("dst") or item.get("zh", ""),
             reference_wav_path=str(reference),
             cfg_value=float(os.getenv("VOXCPM_CFG_VALUE", "2.0")),
             inference_timesteps=int(os.getenv("VOXCPM_INFERENCE_TIMESTEPS", "10")),

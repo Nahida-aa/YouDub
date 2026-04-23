@@ -5,28 +5,38 @@ import os
 import re
 from pathlib import Path
 
-_NLP = None
+_NLP_CACHE: dict[str, object] = {}
+
+SPACY_MODELS = {"en": "en_core_web_sm", "zh": "zh_core_web_sm"}
+
+ZH_SENT_END = "。！？!?；;…"
+ZH_SENT_CLOSE = "\"'”’」』）】〕〗〙〛〉》」』"
+ZH_SPLIT_RE = re.compile(rf".+?[{ZH_SENT_END}]+[{re.escape(ZH_SENT_CLOSE)}]*|.+$", re.DOTALL)
 
 
-def _load_nlp():
-    global _NLP
-    if _NLP is not None:
-        return _NLP
+def _load_nlp(language: str):
+    if language in _NLP_CACHE:
+        return _NLP_CACHE[language]
 
     import spacy
 
-    name = os.getenv("SPACY_MODEL", "en_core_web_sm")
+    name = os.getenv(f"SPACY_MODEL_{language.upper()}") or SPACY_MODELS.get(language, "en_core_web_sm")
     try:
-        _NLP = spacy.load(name)
+        nlp = spacy.load(name)
     except OSError:
-        _NLP = spacy.blank("en")
-        if "sentencizer" not in _NLP.pipe_names:
-            _NLP.add_pipe("sentencizer")
-    return _NLP
+        nlp = spacy.blank(language)
+        if "sentencizer" not in nlp.pipe_names:
+            nlp.add_pipe("sentencizer")
+    _NLP_CACHE[language] = nlp
+    return nlp
+
+
+def _split_sentences_zh(text: str) -> list[str]:
+    return [m.group(0).strip() for m in ZH_SPLIT_RE.finditer(text) if m.group(0).strip()]
 
 
 def _normalize(text: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", text.lower())
+    return re.sub(r"[\s\W_]+", "", text.lower(), flags=re.UNICODE)
 
 
 def _collect_words(utterances: list) -> list:
@@ -41,8 +51,10 @@ def _collect_words(utterances: list) -> list:
     return words
 
 
-def _split_sentences(text: str) -> list:
-    nlp = _load_nlp()
+def _split_sentences(text: str, language: str) -> list:
+    if language == "zh":
+        return _split_sentences_zh(text)
+    nlp = _load_nlp(language)
     return [sent.text.strip() for sent in nlp(text).sents if sent.text.strip()]
 
 
@@ -130,8 +142,31 @@ def _apply_padding(utts: list, duration: int, start_pad: int = 100, end_pad: int
     return result
 
 
+def _resegment(full_text: str, utterances: list, language: str) -> list:
+    has_punct = any(p in full_text for p in ZH_SENT_END + ".!?")
+    if not has_punct:
+        return [
+            {"text": u["text"].strip(), "start_time": u["start_time"], "end_time": u["end_time"]}
+            for u in utterances if u.get("text", "").strip()
+        ]
+
+    words = _collect_words(utterances)
+    if not words:
+        raise RuntimeError("ASR result has no word-level timestamps; cannot re-segment.")
+
+    new_utts = []
+    cursor = 0
+    for sent in _split_sentences(full_text, language):
+        start, end, cursor = _match_sentence(sent, words, cursor)
+        if start is None:
+            continue
+        new_utts.append({"text": sent, "start_time": start, "end_time": end})
+    return new_utts
+
+
 def fix_asr_sentences(asr_file: Path, session: Path,
-                     start_pad: int = 100, end_pad: int = 300) -> Path:
+                     start_pad: int = 100, end_pad: int = 300,
+                     language: str = "en") -> Path:
     output_file = session / "metadata" / "asr_fixed.json"
     if output_file.exists():
         return output_file
@@ -141,22 +176,9 @@ def fix_asr_sentences(asr_file: Path, session: Path,
     utterances = data["result"]["utterances"]
     duration = data.get("audio_info", {}).get("duration", 0)
 
-    words = _collect_words(utterances)
-    if not words:
-        raise RuntimeError("ASR result has no word-level timestamps; cannot re-segment.")
-
-    sentences = _split_sentences(full_text)
-
-    new_utts = []
-    cursor = 0
-    for sent in sentences:
-        start, end, cursor = _match_sentence(sent, words, cursor)
-        if start is None:
-            continue
-        new_utts.append({"text": sent, "start_time": start, "end_time": end})
-
+    new_utts = _resegment(full_text, utterances, language)
     if not new_utts:
-        raise RuntimeError("Sentence fixer matched zero sentences.")
+        raise RuntimeError("Sentence fixer produced zero sentences.")
 
     padded = _apply_padding(new_utts, duration, start_pad, end_pad)
     payload = {

@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import Callable
 
 from . import database
-from .config import WORKFOLDER, YOUTUBE_COOKIE_PATH
+from .config import WORKFOLDER
+from .sources import detect_source
 from .stages import STAGES
 
 
@@ -137,15 +138,16 @@ class PipelineRunner:
         self.log(f"[{stage}] Completed")
 
     def _download(self, task: dict) -> None:
-        from .adapters.ytdlp import download_youtube
+        from .adapters.ytdlp import download_video
 
+        source = detect_source(task["url"])
         proxy_port = database.get_ytdlp_settings()["proxy_port"]
-        session, info = download_youtube(task["url"], WORKFOLDER, YOUTUBE_COOKIE_PATH, proxy_port)
+        session, info = download_video(task["url"], WORKFOLDER, source, proxy_port)
         self.artifacts.session = session
         self.artifacts.video_file = session / "media" / "video_source.mp4"
         title = (info.get("title") or "").strip() or None
         database.update_task(self.task_id, session_path=str(session), title=title)
-        self.stage_message("download", f"{title or 'Downloaded'} -> {session}")
+        self.stage_message("download", f"[{source.name}] {title or 'Downloaded'} -> {session}")
 
     def _separate(self, _: dict) -> None:
         from .adapters.demucs import separate_audio
@@ -155,13 +157,14 @@ class PipelineRunner:
         self.artifacts.vocals_file, self.artifacts.bgm_file = separate_audio(video_file, session)
         self.stage_message("separate", f"Vocals: {self.artifacts.vocals_file.name}, BGM: {self.artifacts.bgm_file.name}")
 
-    def _asr(self, _: dict) -> None:
+    def _asr(self, task: dict) -> None:
         import json as _json
         from .adapters.whisper_asr import recognize_speech
 
         session = _require(self.artifacts.session, "session")
         vocals_file = _require(self.artifacts.vocals_file, "vocals_file")
-        self.artifacts.asr_file = recognize_speech(vocals_file, session)
+        source = detect_source(task["url"])
+        self.artifacts.asr_file = recognize_speech(vocals_file, session, language=source.asr_language)
         data = _json.loads(self.artifacts.asr_file.read_text(encoding="utf-8"))
         utterances = data["result"]["utterances"]
         word_count = sum(len(u.get("words") or []) for u in utterances)
@@ -170,29 +173,34 @@ class PipelineRunner:
             f"Recognized {len(utterances)} segments / {word_count} words -> {self.artifacts.asr_file.name}",
         )
 
-    def _asr_fix(self, _: dict) -> None:
+    def _asr_fix(self, task: dict) -> None:
         import json as _json
         from .adapters.asr_sentence_fixer import fix_asr_sentences
 
         session = _require(self.artifacts.session, "session")
         asr_file = _require(self.artifacts.asr_file, "asr_file")
         before = len(_json.loads(asr_file.read_text(encoding="utf-8"))["result"]["utterances"])
-        self.artifacts.asr_fixed_file = fix_asr_sentences(asr_file, session)
+        source = detect_source(task["url"])
+        self.artifacts.asr_fixed_file = fix_asr_sentences(asr_file, session, language=source.asr_language)
         sentences = _json.loads(self.artifacts.asr_fixed_file.read_text(encoding="utf-8"))["result"]["utterances"]
         self.stage_message(
             "asr_fix",
             f"Re-segmented {before} -> {len(sentences)} sentences -> {self.artifacts.asr_fixed_file.name}",
         )
 
-    def _translate(self, _: dict) -> None:
+    def _translate(self, task: dict) -> None:
         import json as _json
         from .adapters.openai_translate import translate_asr
 
         session = _require(self.artifacts.session, "session")
         asr_file = _require(self.artifacts.asr_fixed_file, "asr_fixed_file")
         settings = database.get_openai_settings()
-        self.stage_message("translate", f"Using model {settings['model']} at {settings['base_url']}")
-        self.artifacts.translation_file = translate_asr(asr_file, session, settings)
+        source = detect_source(task["url"])
+        self.stage_message(
+            "translate",
+            f"Using model {settings['model']} at {settings['base_url']} ({source.asr_language}->{source.target_language})",
+        )
+        self.artifacts.translation_file = translate_asr(asr_file, session, settings, source)
         items = _json.loads(self.artifacts.translation_file.read_text(encoding="utf-8"))["translation"]
         self.stage_message(
             "translate",

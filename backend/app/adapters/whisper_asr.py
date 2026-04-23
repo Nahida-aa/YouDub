@@ -49,7 +49,7 @@ def _convert_segments(segments: list) -> list:
     ]
 
 
-def recognize_speech(vocals_file: Path, session: Path) -> Path:
+def recognize_speech(vocals_file: Path, session: Path, language: str) -> Path:
     metadata_dir = session / "metadata"
     metadata_dir.mkdir(parents=True, exist_ok=True)
     output_file = metadata_dir / "asr.json"
@@ -57,7 +57,6 @@ def recognize_speech(vocals_file: Path, session: Path) -> Path:
         return output_file
 
     model = _load_model()
-    language = os.getenv("WHISPER_LANGUAGE", "en") or None
     result = model.transcribe(
         str(vocals_file),
         language=language,
