@@ -72,6 +72,20 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="YouDub API", lifespan=lifespan)
 
 
+DEFAULT_CORS_ORIGIN_REGEX = (
+    r"^https?://("
+    r"localhost|"
+    r"127(?:\.\d{1,3}){3}|"
+    r"0\.0\.0\.0|"
+    r"10(?:\.\d{1,3}){3}|"
+    r"192\.168(?:\.\d{1,3}){2}|"
+    r"172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2}|"
+    r"100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])(?:\.\d{1,3}){2}|"
+    r"\[::1\]"
+    r"):3000$"
+)
+
+
 def cors_origins() -> list[str]:
     defaults = ["http://localhost:3000", "http://127.0.0.1:3000"]
     configured = os.getenv("CORS_ALLOW_ORIGINS", "")
@@ -79,9 +93,15 @@ def cors_origins() -> list[str]:
     return [*defaults, *extra]
 
 
+def cors_origin_regex() -> str:
+    configured = os.getenv("CORS_ALLOW_ORIGIN_REGEX", "").strip()
+    return configured or DEFAULT_CORS_ORIGIN_REGEX
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins(),
+    allow_origin_regex=cors_origin_regex(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

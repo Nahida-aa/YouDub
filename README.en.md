@@ -146,9 +146,11 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o-mini
 YTDLP_PROXY_PORT=
+CORS_ALLOW_ORIGINS=
 ```
 
 The app reads `.env`. Do not commit secrets, cookies, downloaded media, or generated artifacts.
+Common localhost, LAN, and Tailscale `:3000` frontend origins are allowed by default. If you open the frontend through a custom host name, add the full origin to `CORS_ALLOW_ORIGINS`, for example `http://youdub.example.com:3000`.
 
 ### 5. Run
 

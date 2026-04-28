@@ -153,9 +153,11 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o-mini
 YTDLP_PROXY_PORT=
+CORS_ALLOW_ORIGINS=
 ```
 
 `.env` 用于应用运行。不要提交任何密钥、Cookie 或下载产物。
+常见本机、局域网和 Tailscale 的 `:3000` 前端访问来源已默认允许；如果通过自定义域名访问前端，把完整来源追加到 `CORS_ALLOW_ORIGINS`，例如 `http://youdub.example.com:3000`。
 
 ### 5. 启动
 
