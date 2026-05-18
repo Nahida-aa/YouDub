@@ -342,6 +342,10 @@ YouDub WebUI 仍然是 MVP，但已经可以支撑真实创作者的日常视频
 
 如果这个项目对你有帮助，欢迎 Star、Fork、提交 Issue 或 PR，也欢迎分享给关注 AI 视频本地化、开源工具和跨语言内容传播的人。
 
+## 开源许可
+
+本项目使用 Apache License 2.0，详见 [LICENSE](LICENSE)。
+
 ## Star History
 
 <a href="https://www.star-history.com/?repos=liuzhao1225%2FYouDub-webui&type=date&legend=top-left">

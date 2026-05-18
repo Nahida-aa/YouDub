@@ -342,6 +342,10 @@ Contributions are welcome:
 
 If this project is useful to you, please Star it, Fork it, open Issues or PRs, and share it with people interested in AI video localization, open-source tools, and cross-language content.
 
+## License
+
+This project is licensed under the Apache License 2.0. See [LICENSE](LICENSE).
+
 ## Star History
 
 <a href="https://www.star-history.com/?repos=liuzhao1225%2FYouDub-webui&type=date&legend=top-left">
