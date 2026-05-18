@@ -12,6 +12,7 @@ import {
   saveOpenAISettings,
   saveYtdlpSettings,
 } from "@/lib/api"
+import { LANGUAGE_OPTIONS, useI18n } from "@/lib/i18n"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -43,7 +44,6 @@ type SettingsForm = {
 }
 
 const SAVED_API_KEY_MASK = "********"
-const SAVED_COOKIE_MASK = "******** saved YouTube cookie ********"
 
 const defaultSettings: SettingsForm = {
   cookie: "",
@@ -59,6 +59,7 @@ function uniqueModels(models: string[]) {
 }
 
 export function SettingsDialog() {
+  const { language, loadedModelsText, setLanguage, t } = useI18n()
   const [open, setOpen] = useState(false)
   const [settings, setSettings] = useState(defaultSettings)
   const [message, setMessage] = useState("")
@@ -69,12 +70,14 @@ export function SettingsDialog() {
   const [cookieDirty, setCookieDirty] = useState(false)
   const [apiKeyDirty, setApiKeyDirty] = useState(false)
 
+  const savedCookieMask = t.settings.savedCookie
+
   useEffect(() => {
     if (!open) return
     Promise.all([getCookieInfo(), getOpenAISettings(), getYtdlpSettings()])
       .then(([cookie, openai, ytdlp]) => {
         setSettings({
-          cookie: cookie.exists ? SAVED_COOKIE_MASK : "",
+          cookie: cookie.exists ? savedCookieMask : "",
           baseUrl: openai.base_url,
           apiKey: openai.has_api_key ? openai.api_key || SAVED_API_KEY_MASK : "",
           model: openai.model,
@@ -86,10 +89,10 @@ export function SettingsDialog() {
         setShowApiKey(false)
         setCookieDirty(false)
         setApiKeyDirty(false)
-        setMessage(openai.has_api_key ? "OpenAI key is saved." : "")
+        setMessage(openai.has_api_key ? t.settings.keySaved : "")
       })
       .catch((err) => setMessage(err.message))
-  }, [open])
+  }, [open, savedCookieMask, t.settings.keySaved])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -103,18 +106,18 @@ export function SettingsDialog() {
         translate_concurrency: settings.translateConcurrency,
       })
       const ytdlp = await saveYtdlpSettings({ proxy_port: settings.proxyPort })
-      setMessage("Settings saved.")
+      setMessage(t.settings.saved)
       setSettings((current) => ({
         ...current,
         apiKey: openai.has_api_key ? openai.api_key || SAVED_API_KEY_MASK : "",
-        cookie: cookieDirty ? (cookie?.exists ? SAVED_COOKIE_MASK : "") : current.cookie,
+        cookie: cookieDirty ? (cookie?.exists ? savedCookieMask : "") : current.cookie,
         translateConcurrency: openai.translate_concurrency || current.translateConcurrency,
         proxyPort: ytdlp.proxy_port,
       }))
       setCookieDirty(false)
       setApiKeyDirty(false)
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Failed to save settings")
+      setMessage(err instanceof Error ? err.message : t.settings.saveError)
     }
   }
 
@@ -130,9 +133,9 @@ export function SettingsDialog() {
       setModelOptions(models)
       setModelsLoaded(true)
       setSettings((current) => ({ ...current, model: current.model || models[0] || "" }))
-      setMessage(models.length ? `${models.length} models loaded.` : "No models returned.")
+      setMessage(models.length ? loadedModelsText(models.length) : t.settings.noModels)
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Failed to load models")
+      setMessage(err instanceof Error ? err.message : t.settings.loadModelsError)
     } finally {
       setModelsLoading(false)
     }
@@ -142,23 +145,43 @@ export function SettingsDialog() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button variant="outline" />}>
         <Settings className="size-4" />
-        Settings
+        {t.settings.button}
       </DialogTrigger>
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-hidden sm:max-w-2xl">
         <form onSubmit={submit} className="flex max-h-[calc(100dvh-4rem)] min-h-0 flex-col">
           <DialogHeader className="shrink-0 pr-8">
-            <DialogTitle>Runtime settings</DialogTitle>
-            <DialogDescription>Stored locally by the FastAPI backend.</DialogDescription>
+            <DialogTitle>{t.settings.title}</DialogTitle>
+            <DialogDescription>{t.settings.description}</DialogDescription>
           </DialogHeader>
           <div className="mt-4 min-h-0 overflow-y-auto pr-1">
             <div className="grid gap-4 pb-4">
               <div className="grid gap-2">
-                <Label htmlFor="cookie">YouTube cookie</Label>
+                <Label htmlFor="uiLanguage">{t.settings.language}</Label>
+                <Select
+                  value={language}
+                  onValueChange={(value) => {
+                    if (value === "en" || value === "zh") setLanguage(value)
+                  }}
+                >
+                  <SelectTrigger id="uiLanguage">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LANGUAGE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="cookie">{t.settings.cookie}</Label>
                 <Textarea
                   id="cookie"
                   value={settings.cookie}
                   onFocus={(event) => {
-                    if (!cookieDirty && settings.cookie === SAVED_COOKIE_MASK) {
+                    if (!cookieDirty && settings.cookie === savedCookieMask) {
                       event.currentTarget.select()
                     }
                   }}
@@ -166,15 +189,15 @@ export function SettingsDialog() {
                     setCookieDirty(true)
                     setSettings((current) => ({
                       ...current,
-                      cookie: event.target.value.replace(SAVED_COOKIE_MASK, ""),
+                      cookie: event.target.value.replace(savedCookieMask, ""),
                     }))
                   }}
-                  placeholder="Paste Netscape cookie content"
+                  placeholder={t.settings.cookiePlaceholder}
                   className="min-h-44 max-h-[42dvh] overflow-auto font-mono text-xs leading-relaxed"
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="proxyPort">yt-dlp proxy port</Label>
+                <Label htmlFor="proxyPort">{t.settings.proxyPort}</Label>
                 <Input
                   id="proxyPort"
                   inputMode="numeric"
@@ -186,7 +209,7 @@ export function SettingsDialog() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="baseUrl">OpenAI base URL</Label>
+                <Label htmlFor="baseUrl">{t.settings.baseUrl}</Label>
                 <Input
                   id="baseUrl"
                   value={settings.baseUrl}
@@ -196,7 +219,7 @@ export function SettingsDialog() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="apiKey">OpenAI API key</Label>
+                <Label htmlFor="apiKey">{t.settings.apiKey}</Label>
                 <div className="relative">
                   <Input
                     id="apiKey"
@@ -214,7 +237,7 @@ export function SettingsDialog() {
                         apiKey: event.target.value.replace(SAVED_API_KEY_MASK, ""),
                       }))
                     }}
-                    placeholder="Leave blank to keep existing key"
+                    placeholder={t.settings.apiKeyPlaceholder}
                     className="pr-9"
                   />
                   <Button
@@ -225,13 +248,13 @@ export function SettingsDialog() {
                     onClick={() => setShowApiKey((current) => !current)}
                   >
                     {showApiKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                    <span className="sr-only">{showApiKey ? "Hide API key" : "Show API key"}</span>
+                    <span className="sr-only">{showApiKey ? t.settings.hideApiKey : t.settings.showApiKey}</span>
                   </Button>
                 </div>
               </div>
               <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
                 <div className="grid gap-2">
-                  <Label htmlFor="model">Model</Label>
+                  <Label htmlFor="model">{t.settings.model}</Label>
                   {modelsLoaded && modelOptions.length > 0 ? (
                     <Select
                       value={settings.model}
@@ -240,7 +263,7 @@ export function SettingsDialog() {
                       }
                     >
                       <SelectTrigger id="model">
-                        <SelectValue placeholder="Select model" />
+                        <SelectValue placeholder={t.settings.selectModel} />
                       </SelectTrigger>
                       <SelectContent>
                         {modelOptions.map((model) => (
@@ -268,12 +291,12 @@ export function SettingsDialog() {
                     disabled={modelsLoading || !settings.baseUrl.trim()}
                   >
                     <RefreshCw className="size-4" />
-                    {modelsLoading ? "Loading" : "Get models"}
+                    {modelsLoading ? t.settings.loading : t.settings.getModels}
                   </Button>
                 </div>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="translateConcurrency">Translate concurrency</Label>
+                <Label htmlFor="translateConcurrency">{t.settings.translateConcurrency}</Label>
                 <Input
                   id="translateConcurrency"
                   inputMode="numeric"
@@ -287,14 +310,14 @@ export function SettingsDialog() {
                   placeholder="50"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Parallel OpenAI requests during the translate stage. Increase if your provider allows it.
+                  {t.settings.concurrencyHelp}
                 </p>
               </div>
               {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
             </div>
           </div>
           <DialogFooter className="shrink-0">
-            <Button type="submit">Save settings</Button>
+            <Button type="submit">{t.settings.save}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

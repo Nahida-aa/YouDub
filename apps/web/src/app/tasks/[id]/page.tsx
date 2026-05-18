@@ -25,6 +25,7 @@ import {
   rerunTask,
   resumeTask,
 } from "@/lib/api"
+import { useI18n } from "@/lib/i18n"
 import { statusBadgeClass } from "@/lib/status"
 import { AppHeader } from "@/components/app-header"
 import { Badge } from "@/components/ui/badge"
@@ -77,6 +78,7 @@ function durationOf(start: string | null, end: string | null) {
 export default function TaskDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
+  const { stageLabel, statusLabel, t } = useI18n()
   const [task, setTask] = useState<Task | null>(null)
   const [log, setLog] = useState("")
   const [error, setError] = useState("")
@@ -96,7 +98,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
       await deleteTask(id)
       router.replace("/")
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Failed to delete task")
+      setDeleteError(err instanceof Error ? err.message : t.task.deleteError)
       setDeleting(false)
     }
   }
@@ -110,7 +112,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
       setTask(next)
       setLog("")
     } catch (err) {
-      setRerunError(err instanceof Error ? err.message : "Failed to rerun task")
+      setRerunError(err instanceof Error ? err.message : t.task.rerunError)
     } finally {
       setRerunning(false)
     }
@@ -123,7 +125,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
       const next = await resumeTask(id)
       setTask(next)
     } catch (err) {
-      setResumeError(err instanceof Error ? err.message : "Failed to resume task")
+      setResumeError(err instanceof Error ? err.message : t.task.resumeError)
     } finally {
       setResuming(false)
     }
@@ -143,7 +145,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
         if (cancelled) return
         setLog(logText)
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load task")
+        if (!cancelled) setError(err instanceof Error ? err.message : t.task.loadError)
       }
     }
     load()
@@ -152,7 +154,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
       cancelled = true
       window.clearInterval(interval)
     }
-  }, [id])
+  }, [id, t.task.loadError])
 
   const progress = useMemo(() => {
     if (!task?.stages?.length) return 0
@@ -181,8 +183,8 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
         <Card>
           <CardHeader className="gap-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <CardTitle>Task overview</CardTitle>
-              <Badge className={statusBadgeClass(task?.status)}>{task?.status || "loading"}</Badge>
+              <CardTitle>{t.task.overview}</CardTitle>
+              <Badge className={statusBadgeClass(task?.status)}>{statusLabel(task?.status)}</Badge>
             </div>
             <Progress value={progress} />
           </CardHeader>
@@ -191,7 +193,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
               <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-[120px_1fr]">
                 {task.title ? (
                   <>
-                    <dt className="text-muted-foreground">Title</dt>
+                    <dt className="text-muted-foreground">{t.task.title}</dt>
                     <dd className="break-words font-medium">{task.title}</dd>
                   </>
                 ) : null}
@@ -201,23 +203,23 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
                     {task.url}
                   </a>
                 </dd>
-                <dt className="text-muted-foreground">Task ID</dt>
+                <dt className="text-muted-foreground">{t.task.taskId}</dt>
                 <dd className="font-mono text-xs">{task.id}</dd>
-                <dt className="text-muted-foreground">Created</dt>
+                <dt className="text-muted-foreground">{t.task.created}</dt>
                 <dd>{formatTime(task.created_at)}</dd>
-                <dt className="text-muted-foreground">Started</dt>
+                <dt className="text-muted-foreground">{t.task.started}</dt>
                 <dd>{formatTime(task.started_at)}</dd>
-                <dt className="text-muted-foreground">Completed</dt>
+                <dt className="text-muted-foreground">{t.task.completed}</dt>
                 <dd>{formatTime(task.completed_at) || "—"}</dd>
                 {task.session_path ? (
                   <>
-                    <dt className="text-muted-foreground">Session</dt>
+                    <dt className="text-muted-foreground">{t.task.session}</dt>
                     <dd className="break-all text-xs text-muted-foreground">{task.session_path}</dd>
                   </>
                 ) : null}
               </dl>
             ) : (
-              <div className="py-6 text-center text-sm text-muted-foreground">Loading task…</div>
+              <div className="py-6 text-center text-sm text-muted-foreground">{t.task.loading}</div>
             )}
           </CardContent>
         </Card>
@@ -225,7 +227,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
         {task?.status === "succeeded" && task.final_video_path ? (
           <Card>
             <CardHeader>
-              <CardTitle>Final video</CardTitle>
+              <CardTitle>{t.task.finalVideo}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <video
@@ -238,7 +240,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
               <p className="break-all text-xs text-muted-foreground">{task.final_video_path}</p>
               <Button nativeButton={false} render={<a href={finalVideoDownloadUrl(task.id)} />}>
                 <Download className="size-4" />
-                Download
+                {t.task.download}
               </Button>
             </CardContent>
           </Card>
@@ -246,7 +248,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
 
         <Card>
           <CardHeader>
-            <CardTitle>Stages</CardTitle>
+            <CardTitle>{t.task.stages}</CardTitle>
           </CardHeader>
           <CardContent>
             {task ? (
@@ -260,8 +262,8 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-xs text-muted-foreground">#{index + 1}</span>
-                        <p className="font-medium">{stage.label}</p>
-                        <Badge className={statusBadgeClass(stage.status)}>{stage.status}</Badge>
+                        <p className="font-medium">{stageLabel(stage.name, stage.label)}</p>
+                        <Badge className={statusBadgeClass(stage.status)}>{statusLabel(stage.status)}</Badge>
                         {stage.started_at ? (
                           <span className="text-xs text-muted-foreground">
                             {durationOf(stage.started_at, stage.completed_at)}
@@ -269,7 +271,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
                         ) : null}
                       </div>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        {stage.error_message || stage.last_message || "Waiting"}
+                        {stage.error_message || stage.last_message || t.common.waiting}
                       </p>
                     </div>
                   </li>
@@ -285,11 +287,11 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
             {isFailed ? (
               <div className="mt-4 flex flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm text-amber-800">
-                  Resume from the failed stage. Already-succeeded stages will be reused from cache.
+                  {t.task.resumeHelp}
                 </p>
                 <Button onClick={handleResume} disabled={resuming}>
                   {resuming ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
-                  {resuming ? "Resuming" : "Resume task"}
+                  {resuming ? t.task.resuming : t.task.resumeTask}
                 </Button>
               </div>
             ) : null}
@@ -303,7 +305,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Run log</CardTitle>
+            <CardTitle>{t.task.runLog}</CardTitle>
             <FileText className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -311,7 +313,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
               {log ? (
                 <pre className="whitespace-pre-wrap break-words font-mono">{log}</pre>
               ) : (
-                <p className="text-zinc-400">Logs will appear once the task starts.</p>
+                <p className="text-zinc-400">{t.task.emptyLog}</p>
               )}
             </ScrollArea>
           </CardContent>
@@ -319,27 +321,27 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
 
         <Card className="border-red-200">
           <CardHeader>
-            <CardTitle className="text-red-700">Danger zone</CardTitle>
+            <CardTitle className="text-red-700">{t.task.dangerZone}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-muted-foreground">
-                Wipe the session directory and run this URL again from scratch.
+                {t.task.rerunHelp}
               </p>
               <Dialog open={rerunOpen} onOpenChange={setRerunOpen}>
                 <DialogTrigger
                   render={
                     <Button variant="outline" disabled={!task || isRunning}>
                       <RotateCw className="size-4" />
-                      Rerun task
+                      {t.task.rerunTask}
                     </Button>
                   }
                 />
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Rerun this task?</DialogTitle>
+                    <DialogTitle>{t.task.rerunTitle}</DialogTitle>
                     <DialogDescription>
-                      Existing log, session directory and final video will be deleted, then the same URL is re-queued under the same task id.
+                      {t.task.rerunDescription}
                     </DialogDescription>
                   </DialogHeader>
                   {rerunError ? (
@@ -349,11 +351,11 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
                   ) : null}
                   <DialogFooter>
                     <DialogClose render={<Button variant="outline" disabled={rerunning} />}>
-                      Cancel
+                      {t.common.cancel}
                     </DialogClose>
                     <Button onClick={handleRerun} disabled={rerunning}>
                       {rerunning ? <Loader2 className="size-4 animate-spin" /> : <RotateCw className="size-4" />}
-                      {rerunning ? "Rerunning" : "Confirm rerun"}
+                      {rerunning ? t.task.rerunning : t.task.confirmRerun}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -361,22 +363,23 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-muted-foreground">
-                Delete this task, its run log, and the entire session directory under <code className="font-mono text-xs">workfolder/</code>.
+                {t.task.deleteHelp} <code className="font-mono text-xs">workfolder/</code>
+                {t.common.sentenceEnd}
               </p>
               <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
                 <DialogTrigger
                   render={
                     <Button variant="destructive" disabled={!task || isRunning}>
                       <Trash2 className="size-4" />
-                      Delete task
+                      {t.task.deleteTask}
                     </Button>
                   }
                 />
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Delete this task?</DialogTitle>
+                    <DialogTitle>{t.task.deleteTitle}</DialogTitle>
                     <DialogDescription>
-                      This permanently removes the task record, its log file, and the entire session directory. This action cannot be undone.
+                      {t.task.deleteDescription}
                     </DialogDescription>
                   </DialogHeader>
                   {deleteError ? (
@@ -386,18 +389,18 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
                   ) : null}
                   <DialogFooter>
                     <DialogClose render={<Button variant="outline" disabled={deleting} />}>
-                      Cancel
+                      {t.common.cancel}
                     </DialogClose>
                     <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
                       {deleting ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-                      {deleting ? "Deleting" : "Confirm delete"}
+                      {deleting ? t.task.deleting : t.task.confirmDelete}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
             </div>
             {isRunning ? (
-              <p className="text-xs text-amber-600">Running tasks cannot be rerun or deleted. Wait until it finishes or fails.</p>
+              <p className="text-xs text-amber-600">{t.task.runningLocked}</p>
             ) : null}
           </CardContent>
         </Card>
