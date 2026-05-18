@@ -261,7 +261,7 @@ function setDocumentLanguage(language: UiLanguage) {
 }
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<UiLanguage>("en")
+  const [language, setLanguageState] = useState<UiLanguage>("zh")
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY)
