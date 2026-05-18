@@ -44,6 +44,9 @@ type SettingsForm = {
 }
 
 const SAVED_API_KEY_MASK = "********"
+const SAVED_COOKIE_SENTINEL = "__YOUDUB_SAVED_COOKIE__"
+
+type MessageKey = "keySaved" | "saved"
 
 const defaultSettings: SettingsForm = {
   cookie: "",
@@ -63,6 +66,7 @@ export function SettingsDialog() {
   const [open, setOpen] = useState(false)
   const [settings, setSettings] = useState(defaultSettings)
   const [message, setMessage] = useState("")
+  const [messageKey, setMessageKey] = useState<MessageKey | null>(null)
   const [modelOptions, setModelOptions] = useState<string[]>([])
   const [modelsLoaded, setModelsLoaded] = useState(false)
   const [modelsLoading, setModelsLoading] = useState(false)
@@ -70,14 +74,17 @@ export function SettingsDialog() {
   const [cookieDirty, setCookieDirty] = useState(false)
   const [apiKeyDirty, setApiKeyDirty] = useState(false)
 
-  const savedCookieMask = t.settings.savedCookie
+  const cookieValue =
+    settings.cookie === SAVED_COOKIE_SENTINEL ? t.settings.savedCookie : settings.cookie
+  const visibleMessage =
+    messageKey === "keySaved" ? t.settings.keySaved : messageKey === "saved" ? t.settings.saved : message
 
   useEffect(() => {
     if (!open) return
     Promise.all([getCookieInfo(), getOpenAISettings(), getYtdlpSettings()])
       .then(([cookie, openai, ytdlp]) => {
         setSettings({
-          cookie: cookie.exists ? savedCookieMask : "",
+          cookie: cookie.exists ? SAVED_COOKIE_SENTINEL : "",
           baseUrl: openai.base_url,
           apiKey: openai.has_api_key ? openai.api_key || SAVED_API_KEY_MASK : "",
           model: openai.model,
@@ -89,14 +96,19 @@ export function SettingsDialog() {
         setShowApiKey(false)
         setCookieDirty(false)
         setApiKeyDirty(false)
-        setMessage(openai.has_api_key ? t.settings.keySaved : "")
+        setMessage("")
+        setMessageKey(openai.has_api_key ? "keySaved" : null)
       })
-      .catch((err) => setMessage(err.message))
-  }, [open, savedCookieMask, t.settings.keySaved])
+      .catch((err) => {
+        setMessageKey(null)
+        setMessage(err.message)
+      })
+  }, [open])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setMessage("")
+    setMessageKey(null)
     try {
       const cookie = cookieDirty ? await saveCookie(settings.cookie) : null
       const openai = await saveOpenAISettings({
@@ -106,23 +118,25 @@ export function SettingsDialog() {
         translate_concurrency: settings.translateConcurrency,
       })
       const ytdlp = await saveYtdlpSettings({ proxy_port: settings.proxyPort })
-      setMessage(t.settings.saved)
+      setMessageKey("saved")
       setSettings((current) => ({
         ...current,
         apiKey: openai.has_api_key ? openai.api_key || SAVED_API_KEY_MASK : "",
-        cookie: cookieDirty ? (cookie?.exists ? savedCookieMask : "") : current.cookie,
+        cookie: cookieDirty ? (cookie?.exists ? SAVED_COOKIE_SENTINEL : "") : current.cookie,
         translateConcurrency: openai.translate_concurrency || current.translateConcurrency,
         proxyPort: ytdlp.proxy_port,
       }))
       setCookieDirty(false)
       setApiKeyDirty(false)
     } catch (err) {
+      setMessageKey(null)
       setMessage(err instanceof Error ? err.message : t.settings.saveError)
     }
   }
 
   async function fetchModels() {
     setMessage("")
+    setMessageKey(null)
     setModelsLoading(true)
     try {
       const response = await getOpenAIModels({
@@ -135,6 +149,7 @@ export function SettingsDialog() {
       setSettings((current) => ({ ...current, model: current.model || models[0] || "" }))
       setMessage(models.length ? loadedModelsText(models.length) : t.settings.noModels)
     } catch (err) {
+      setMessageKey(null)
       setMessage(err instanceof Error ? err.message : t.settings.loadModelsError)
     } finally {
       setModelsLoading(false)
@@ -179,9 +194,9 @@ export function SettingsDialog() {
                 <Label htmlFor="cookie">{t.settings.cookie}</Label>
                 <Textarea
                   id="cookie"
-                  value={settings.cookie}
+                  value={cookieValue}
                   onFocus={(event) => {
-                    if (!cookieDirty && settings.cookie === savedCookieMask) {
+                    if (!cookieDirty && settings.cookie === SAVED_COOKIE_SENTINEL) {
                       event.currentTarget.select()
                     }
                   }}
@@ -189,7 +204,10 @@ export function SettingsDialog() {
                     setCookieDirty(true)
                     setSettings((current) => ({
                       ...current,
-                      cookie: event.target.value.replace(savedCookieMask, ""),
+                      cookie:
+                        current.cookie === SAVED_COOKIE_SENTINEL
+                          ? event.target.value.replace(t.settings.savedCookie, "")
+                          : event.target.value,
                     }))
                   }}
                   placeholder={t.settings.cookiePlaceholder}
@@ -313,7 +331,7 @@ export function SettingsDialog() {
                   {t.settings.concurrencyHelp}
                 </p>
               </div>
-              {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
+              {visibleMessage ? <p className="text-sm text-muted-foreground">{visibleMessage}</p> : null}
             </div>
           </div>
           <DialogFooter className="shrink-0">
