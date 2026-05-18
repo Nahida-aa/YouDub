@@ -10,6 +10,7 @@ import {
   createTask,
   listTasks,
 } from "@/lib/api"
+import { useI18n } from "@/lib/i18n"
 import { statusBadgeClass } from "@/lib/status"
 import { AppHeader } from "@/components/app-header"
 import { Badge } from "@/components/ui/badge"
@@ -45,6 +46,7 @@ function activeCount(tasks: TaskSummary[]) {
 
 export default function Home() {
   const router = useRouter()
+  const { activeTasksText, stageLabel, statusLabel, t } = useI18n()
   const [youtubeUrl, setYoutubeUrl] = useState("")
   const [bilibiliUrl, setBilibiliUrl] = useState("")
   const [tasks, setTasks] = useState<TaskSummary[]>([])
@@ -64,7 +66,7 @@ export default function Home() {
         if (cancelled) return
         setTasks(list)
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load tasks")
+        if (!cancelled) setError(err instanceof Error ? err.message : t.home.loadError)
       }
     }
     load()
@@ -73,7 +75,7 @@ export default function Home() {
       cancelled = true
       window.clearInterval(interval)
     }
-  }, [])
+  }, [t.home.loadError])
 
   async function submitTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -88,7 +90,7 @@ export default function Home() {
       refreshTasks().catch(() => undefined)
       router.push(`/tasks/${created.id}`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create task")
+      setError(err instanceof Error ? err.message : t.home.createError)
     } finally {
       setSubmitting(false)
     }
@@ -104,12 +106,12 @@ export default function Home() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Create new task</CardTitle>
+            <CardTitle>{t.home.createTitle}</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={submitTask} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="youtube-url">YouTube URL (English → Chinese)</Label>
+                <Label htmlFor="youtube-url">{t.home.youtubeLabel}</Label>
                 <Input
                   id="youtube-url"
                   value={youtubeUrl}
@@ -119,7 +121,7 @@ export default function Home() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="bilibili-url">Bilibili URL (Chinese → English)</Label>
+                <Label htmlFor="bilibili-url">{t.home.bilibiliLabel}</Label>
                 <Input
                   id="bilibili-url"
                   value={bilibiliUrl}
@@ -131,14 +133,14 @@ export default function Home() {
               <div className="flex items-center justify-between gap-3">
                 {queued > 0 ? (
                   <p className="text-xs text-muted-foreground">
-                    {queued} task{queued > 1 ? "s" : ""} queued / running
+                    {activeTasksText(queued)}
                   </p>
                 ) : (
                   <span />
                 )}
                 <Button type="submit" disabled={!canSubmit}>
                   <Play className="size-4" />
-                  {submitting ? "Submitting" : "Create task"}
+                  {submitting ? t.home.submitting : t.home.createTask}
                 </Button>
               </div>
             </form>
@@ -153,12 +155,12 @@ export default function Home() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Task history ({tasks.length})</CardTitle>
+            <CardTitle>{t.home.taskHistory} ({tasks.length})</CardTitle>
           </CardHeader>
           <CardContent className="px-0">
             {tasks.length === 0 ? (
               <div className="px-6 py-12 text-center text-sm text-muted-foreground">
-                No tasks yet. Submit a YouTube or Bilibili URL above to start.
+                {t.home.empty}
               </div>
             ) : (
               <ScrollArea className="max-h-[70dvh]">
@@ -174,10 +176,10 @@ export default function Home() {
                             {item.title || shortUrl(item.url)}
                           </p>
                           <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                            <Badge className={statusBadgeClass(item.status)}>{item.status}</Badge>
+                            <Badge className={statusBadgeClass(item.status)}>{statusLabel(item.status)}</Badge>
                             <span>{formatTime(item.created_at)}</span>
                             {isActive(item.status) && item.current_stage ? (
-                              <span>· {item.current_stage}</span>
+                              <span>· {stageLabel(item.current_stage)}</span>
                             ) : null}
                           </div>
                         </div>
