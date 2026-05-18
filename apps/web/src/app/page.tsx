@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { FormEvent, useCallback, useEffect, useState } from "react"
+import { FormEvent, useEffect, useState } from "react"
 import { ChevronRight, Play } from "lucide-react"
 
 import {
@@ -53,24 +53,25 @@ export default function Home() {
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
-  const refreshTasks = useCallback(async () => {
+  async function refreshTasks() {
     const { tasks: list } = await listTasks()
     setTasks(list)
-  }, [])
+  }
 
   useEffect(() => {
     let cancelled = false
-    const load = async () => {
+
+    const loadTasks = async () => {
       try {
         const { tasks: list } = await listTasks()
-        if (cancelled) return
-        setTasks(list)
+        if (!cancelled) setTasks(list)
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : t.home.loadError)
       }
     }
-    load()
-    const interval = window.setInterval(load, 2000)
+
+    loadTasks()
+    const interval = window.setInterval(loadTasks, 2000)
     return () => {
       cancelled = true
       window.clearInterval(interval)

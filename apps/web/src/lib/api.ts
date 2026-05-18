@@ -1,10 +1,12 @@
-function defaultApiBase(): string {
-  if (typeof window === "undefined") return "http://localhost:8000"
-  return `${window.location.protocol}//${window.location.hostname}:8000`
+function configuredApiBase(): string {
+  const configured = process.env.NEXT_PUBLIC_API_BASE_URL?.trim()
+  if (configured) return configured.replace(/\/$/, "")
+
+  if (typeof window === "undefined") return "http://127.0.0.1:8000"
+  return ""
 }
 
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || defaultApiBase()
+export const API_BASE = configuredApiBase()
 
 export type StageStatus = "pending" | "running" | "succeeded" | "failed"
 export type TaskStatus = "queued" | "running" | "succeeded" | "failed"
