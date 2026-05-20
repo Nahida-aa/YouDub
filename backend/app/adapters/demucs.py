@@ -5,11 +5,14 @@ from pathlib import Path
 from typing import Callable
 
 from ..config import REPO_ROOT
+<<<<<<< HEAD
 from ..devices import resolve_device
 
 
 def _device() -> str:
     return resolve_device("demucs").selected
+=======
+>>>>>>> aac7cc0 (aa)
 
 
 def _demucs_progress(info: dict, shifts: int) -> int:
@@ -40,6 +43,7 @@ def separate_audio(
     if vocals_file.exists() and bgm_file.exists():
         return vocals_file, bgm_file
 
+<<<<<<< HEAD
     shifts = 3
 
     def report_progress(info: dict) -> None:
@@ -55,6 +59,9 @@ def separate_audio(
         shifts=shifts,
         callback=report_progress,
     )
+=======
+    separator = Separator(model="htdemucs_ft", device="cpu", progress=True, shifts=3)
+>>>>>>> aac7cc0 (aa)
     _, separated = separator.separate_audio_file(str(video_file))
 
     vocals = separated["vocals"]
