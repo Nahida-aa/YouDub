@@ -7,9 +7,24 @@ from urllib.parse import urlparse
 
 from pydub import AudioSegment
 
+<<<<<<< HEAD
 from ..devices import resolve_device
+=======
+from ..config import device as _config_device
+>>>>>>> aac7cc0 (aa)
 
 _MODEL = None
+
+
+def _device() -> str:
+    value = _config_device()
+    if value != "auto":
+        return value
+    try:
+        import torch
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    except Exception:
+        return "cpu"
 
 
 def _whisper_cache_file(whisper, name: str, download_root: str | None) -> Path | None:
@@ -47,13 +62,21 @@ def _load_model():
     whisper_device = resolve_device("whisper").selected
     download_root = os.getenv("WHISPER_DOWNLOAD_ROOT") or None
     try:
+<<<<<<< HEAD
         _MODEL = whisper.load_model(name, device=whisper_device, download_root=download_root)
+=======
+        _MODEL = whisper.load_model(name, device=_device(), download_root=download_root)
+>>>>>>> aac7cc0 (aa)
     except RuntimeError as exc:
         if not _is_checksum_error(exc):
             raise
         if not _remove_corrupt_whisper_cache(whisper, name, download_root):
             raise
+<<<<<<< HEAD
         _MODEL = whisper.load_model(name, device=whisper_device, download_root=download_root)
+=======
+        _MODEL = whisper.load_model(name, device=_device(), download_root=download_root)
+>>>>>>> aac7cc0 (aa)
 
     return _MODEL
 
