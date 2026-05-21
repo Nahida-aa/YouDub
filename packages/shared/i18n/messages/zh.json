@@ -20,6 +20,8 @@
   "ko": "한국어",
   "pt": "Português",
   "ru": "Русский",
+  "task_runLog": "运行日志",
+  "task_emptyLog": "任务开始后会显示日志。",
   "signin": "登录",
   "signinDescription": "输入你的邮箱以登录账户",
   "toSignUp": "没有账户？注册",

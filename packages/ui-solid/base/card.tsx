@@ -2,11 +2,11 @@
 import { cn } from '@repo/shared/lib/utils';
 import { ComponentProps, splitProps } from 'solid-js';
 
-function Card(props: ComponentProps<'div'> & { size?: 'default' | 'sm' }) {
+export function Card(props: ComponentProps<'div'> & { size?: 'default' | 'sm' }) {
 	const [local, others] = splitProps(props, ['class', 'size']);
 	return (
 		<div
-		{...others}
+			{...others}
 			data-slot="card"
 			data-size={local.size||'default'}
 			class={cn(
@@ -97,7 +97,7 @@ function CardFooter(props: ComponentProps<'div'>) {
 }
 
 export {
-	Card,
+
 	CardAction,
 	CardContent,
 	CardDescription,

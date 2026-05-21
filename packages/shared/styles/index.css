@@ -63,7 +63,7 @@ code {
   --accent: var(--ctp-surface1);
   --background: var(--ctp-base);
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.141 0.005 285.823);
+  --card: var(--ctp-mantle);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.141 0.005 285.823);
   --popover-foreground: oklch(0.985 0 0);

@@ -53,6 +53,11 @@ class OpenAIModelsRequest(BaseModel):
     api_key: str = ""
 
 
+class RerunStageRequest(BaseModel):
+    stage: str
+    cascade: bool = False
+
+
 class YtdlpSettingsUpdate(BaseModel):
     proxy_port: str = ""
 
@@ -291,6 +296,22 @@ def resume_task(task_id: str) -> dict:
         raise HTTPException(status_code=409, detail="Only failed tasks can be resumed.")
     _ensure_runtime_ready()
     database.reset_failed_for_resume(task_id)
+    worker.enqueue(task_id)
+    return database.get_task(task_id)
+
+
+@app.post("/api/tasks/{task_id}/rerun-stage")
+def rerun_stage(task_id: str, payload: RerunStageRequest) -> dict:
+    task = database.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found.")
+    if task["status"] == "running":
+        raise HTTPException(status_code=409, detail="Cannot rerun a stage on a running task.")
+    stage_name = payload.stage
+    stage_names = [s.name for s in task["stages"]]
+    if stage_name not in stage_names:
+        raise HTTPException(status_code=422, detail=f"Unknown stage: {stage_name}")
+    database.reset_stage(task_id, stage_name, cascade=payload.cascade)
     worker.enqueue(task_id)
     return database.get_task(task_id)
 
