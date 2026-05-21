@@ -1,4 +1,4 @@
-import appCss from '@repo/shared/styles/index.css?url';
+// import appCss from '@repo/shared/styles/index.css?url';
 import { Devtools } from '@repo/ui-solid/app/devtools';
 import { ThemeProvider, themeScript } from '@repo/ui-solid/theme';
 import type { QueryClient } from '@tanstack/solid-query';
@@ -14,24 +14,12 @@ export const Route = createRootRouteWithContext<{
 	queryClient: QueryClient;
 }>()({
 	head: () => ({
-		meta: [
-			{
-				charSet: 'utf-8',
-			},
-			{
-				name: 'viewport',
-				content: 'width=device-width, initial-scale=1',
-			},
-			{
-				title: 'Tauri + TanStack Start',
-			},
-		],
-		links: [
-			{
-				rel: 'stylesheet',
-				href: appCss,
-			},
-		],
+		// links: [
+		// 	{
+		// 		rel: 'stylesheet',
+		// 		href: appCss,
+		// 	},
+		// ],
 		scripts: [{ children: themeScript }],
 	}),
 
@@ -42,21 +30,23 @@ function RootComponent() {
 	return (
 		<>
 			<HeadContent />
-			<div class="antialiased">
+			<div class="antialiased min-h-dvh flex flex-col">
 				<Suspense>
 					<ThemeProvider>
-						<div class="p-2 flex gap-2 text-lg">
-							<Link
-								// @ts-expect-error
-								to="/this-route-does-not-exist"
-								activeProps={{
-									class: 'font-bold',
-								}}
-							>
-								This Route Does Not Exist
-							</Link>
-						</div>
-						<Outlet />
+						<header class="border-b border-border/60">
+							<div class="mx-auto flex h-12 max-w-4xl items-center gap-4 px-4">
+								<Link
+									to="/"
+									class="text-sm font-semibold hover:text-muted-foreground transition-colors"
+									activeOptions={{ exact: true }}
+								>
+									YouDub
+								</Link>
+							</div>
+						</header>
+						<main class="flex-1">
+							<Outlet />
+						</main>
 					</ThemeProvider>
 					<Devtools />
 				</Suspense>

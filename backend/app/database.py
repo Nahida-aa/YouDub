@@ -226,6 +226,37 @@ def delete_task(task_id: str) -> bool:
         return cursor.rowcount > 0
 
 
+def reset_stage(task_id: str, stage: str, cascade: bool = False) -> None:
+    with connect() as conn:
+        if cascade:
+            stage_idx = STAGE_NAMES.index(stage) if stage in STAGE_NAMES else -1
+            if stage_idx == -1:
+                raise ValueError(f"Unknown stage: {stage}")
+            names_to_reset = STAGE_NAMES[stage_idx:]
+        else:
+            names_to_reset = (stage,)
+
+        placeholders = ",".join("?" for _ in names_to_reset)
+        conn.execute(
+            f"""
+            UPDATE task_stages
+            SET status = 'pending', started_at = NULL, completed_at = NULL,
+                last_message = NULL, error_message = NULL
+            WHERE task_id = ? AND name IN ({placeholders})
+            """,
+            (task_id, *names_to_reset),
+        )
+        conn.execute(
+            """
+            UPDATE tasks
+            SET status = 'queued', error_message = NULL, completed_at = NULL,
+                started_at = NULL, final_video_path = NULL
+            WHERE id = ?
+            """,
+            (task_id,),
+        )
+
+
 def reset_failed_for_resume(task_id: str) -> None:
     with connect() as conn:
         conn.execute(
