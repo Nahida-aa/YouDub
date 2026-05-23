@@ -1,13 +1,13 @@
 import { createFileRoute, useParams, useNavigate, Link } from '@tanstack/solid-router';
 import { createSignal, createMemo, For, Show } from 'solid-js';
 import { createQuery } from '@tanstack/solid-query';
-import { ArrowLeft, Download, Play, RotateCcw, Trash2, AlertTriangle, CheckCircle2, Loader2, Clock, XCircle } from 'lucide-solid';
+import { ArrowLeft, Download, Play, RotateCcw, Trash2, AlertTriangle, CheckCircle2, Loader2, Clock, XCircle, Languages } from 'lucide-solid';
 import { Button } from '@repo/ui-solid/base/button';
 import { Badge } from '@repo/ui-solid/base/badge';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from '@repo/ui-solid/base/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@repo/ui-solid/base/dialog';
-import type { Task, TaskStage } from '../lib/api';
-import { getTask, getTaskLog, deleteTask, resumeTask, rerunStage, finalVideoUrl, finalVideoDownloadUrl } from '../lib/api';
+import type { TaskStage } from '../lib/api';
+import { getTask, getTaskLog, deleteTask, resumeTask, rerunStage, finalVideoUrl, finalVideoDownloadUrl, getTaskDescription, translateTaskDescription } from '../lib/api';
 
 export const Route = createFileRoute('/tasks/$id')({
 	component: TaskDetail,
@@ -17,15 +17,15 @@ const STAGE_ORDER = ['download', 'separate', 'asr', 'asr_fix', 'translate', 'spl
 
 function stageLabel(name: string): string {
 	const map: Record<string, string> = {
-		download: '下载视频',
-		separate: '人声分离',
-		asr: '语音识别',
-		asr_fix: '句子修正',
-		translate: '翻译',
-		split_audio: '切分音频',
-		tts: '语音合成',
-		merge_audio: '合成音频',
-		merge_video: '合成视频',
+		download: '下载视频(yt-dlp)',
+		separate: '人声分离(demucs/htdemucs_ft)',
+		asr: '语音识别(whisper_asr.py/whisper/large-v3-turbo)',
+		asr_fix: '句子修正(asr_sentence_fixer.py/纯规则无模型)',
+		translate: '翻译字幕(openai_translate.py/openai兼容api,如gpt-4o-mini)',
+		split_audio: '切分音频(audio.py/librosa + pydub（DSP 无模型）)',
+		tts: '语音合成(tts, voxcp.py/OpenBMB,VoxCPM2)',
+		merge_audio: '合成音频(audio.py/librosa + audiostretchy（DSP 无模型）)',
+		merge_video: '合成视频(ffmpeg.py)',
 	};
 	return map[name] ?? name;
 }
@@ -121,10 +121,30 @@ function TaskDetail() {
 	}));
 	const log = () => logQuery.data || '';
 
+	const descQuery = createQuery(() => ({
+		queryKey: ['taskDesc', params().id],
+		queryFn: () => getTaskDescription(params().id),
+		refetchInterval: 2000,
+	}));
+	const description = () => descQuery.data;
+
 	const error = () => (taskQuery.error as Error)?.message || '';
 	const [deleting, setDeleting] = createSignal(false);
 	const [resuming, setResuming] = createSignal(false);
 	const [stageRerunning, setStageRerunning] = createSignal<string | null>(null);
+	const [translatingDesc, setTranslatingDesc] = createSignal(false);
+
+	async function handleTranslateDesc() {
+		setTranslatingDesc(true);
+		try {
+			await translateTaskDescription(params().id);
+			taskQuery.refetch();
+		} catch (err) {
+			alert(err instanceof Error ? err.message : '翻译简介失败');
+		} finally {
+			setTranslatingDesc(false);
+		}
+	}
 
 	async function handleDelete() {
 		setDeleting(true);
@@ -272,6 +292,25 @@ function TaskDetail() {
 					</CardContent>
 				</Card>
 
+				{/* Description */}
+				<Show when={description()?.src}>
+					<Card>
+						<CardHeader>
+							<CardTitle>视频简介</CardTitle>
+						</CardHeader>
+						<CardContent class="space-y-3 text-sm">
+							<div class="rounded-lg bg-muted/50 p-3">
+								<p class="mb-1 text-xs font-medium text-muted-foreground">原文</p>
+								<p class="whitespace-pre-wrap break-words">{description()!.src}</p>
+							</div>
+							<div class="rounded-lg bg-muted/50 p-3">
+								<p class="mb-1 text-xs font-medium text-muted-foreground">中文</p>
+								<p class="whitespace-pre-wrap break-words">{description()!.dst}</p>
+							</div>
+						</CardContent>
+					</Card>
+				</Show>
+
 				{/* Pipeline Stages */}
 				<Card>
 					<CardHeader>
@@ -299,6 +338,7 @@ function TaskDetail() {
 											{/* Content */}
 											<div class="flex-1 min-w-0">
 												<div class="flex items-center gap-2">
+													<span class="text-xs text-muted-foreground">#{index() + 1}</span>
 													<span class="text-sm font-medium">{stageLabel(stage.name)}</span>
 													<Badge class={stageBadgeClass(stage.status)}>
 														{statusLabel(stage.status)}
@@ -352,11 +392,12 @@ function TaskDetail() {
 								controls
 								class="w-full max-h-[70dvh] rounded-lg"
 								src={finalVideoUrl(params().id)}
+								preload="metadata"
 							>
-								您的浏览器不支持视频播放
 							</video>
+							 <p class="break-all text-xs text-muted-foreground">{task()?.final_video_path}</p>
 						</CardContent>
-						<CardFooter>
+						<CardFooter class="flex gap-2">
 							<a
 								href={finalVideoDownloadUrl(params().id)}
 								download={task()?.title || 'video'}
@@ -366,6 +407,15 @@ function TaskDetail() {
 									下载视频
 								</Button>
 							</a>
+							<Button
+								variant="outline"
+								size="sm"
+								disabled={translatingDesc()}
+								onClick={handleTranslateDesc}
+							>
+								<Languages class="size-4" />
+								翻译简介
+							</Button>
 						</CardFooter>
 					</Card>
 				</Show>
