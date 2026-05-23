@@ -237,6 +237,43 @@ def _concurrency_from(settings: dict[str, str]) -> int:
     return concurrency
 
 
+def translate_description(
+    description: str,
+    session: Path,
+    settings: dict[str, str],
+    source: SourceConfig,
+) -> Path:
+    output_file = session / "metadata" / f"description.{source.target_language}.json"
+    if output_file.exists():
+        return output_file
+
+    client = _client(settings["base_url"], settings["api_key"])
+    model = settings["model"]
+
+    system = (
+        f"You are a translator. Translate the following YouTube video description "
+        f"from {source.asr_language_name} to {source.target_language_name}. "
+        f"Preserve all URLs, line breaks, and emoji. Output only the translation."
+    )
+    user = description
+
+    response = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        temperature=0.2,
+    )
+    translated = (response.choices[0].message.content or "").strip()
+
+    output_file.write_text(
+        json.dumps({"src": description, "dst": translated}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return output_file
+
+
 def translate_asr(
     asr_file: Path,
     session: Path,

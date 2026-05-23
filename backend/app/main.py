@@ -325,6 +325,43 @@ def task_log(task_id: str) -> str:
     return path.read_text(encoding="utf-8") if path.exists() else ""
 
 
+@app.get("/api/tasks/{task_id}/description")
+def get_description(task_id: str) -> dict:
+    task = database.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found.")
+    from .sources import detect_source
+    source = detect_source(task["url"])
+    path = Path(task["session_path"]) / "metadata" / f"description.{source.target_language}.json" if task.get("session_path") else None
+    if not path or not path.exists():
+        return {"src": "", "dst": ""}
+    import json
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return {"src": data.get("src", ""), "dst": data.get("dst", "")}
+
+
+@app.post("/api/tasks/{task_id}/translate-description")
+def translate_task_description(task_id: str) -> dict:
+    task = database.get_task(task_id)
+    if not task or not task.get("session_path"):
+        raise HTTPException(status_code=404, detail="Task or session not found.")
+    from .sources import detect_source
+    from .adapters.openai_translate import translate_description
+    import json as _json
+    meta_path = Path(task["session_path"]) / "metadata" / "ytdlp_info.json"
+    if not meta_path.exists():
+        raise HTTPException(status_code=404, detail="Metadata not found.")
+    meta = _json.loads(meta_path.read_text(encoding="utf-8"))
+    description = (meta.get("description") or "").strip()
+    if not description:
+        return {"src": "", "dst": ""}
+    source = detect_source(task["url"])
+    settings = database.get_openai_settings()
+    path = translate_description(description, Path(task["session_path"]), settings, source)
+    data = _json.loads(path.read_text(encoding="utf-8"))
+    return {"src": data["src"], "dst": data["dst"]}
+
+
 @app.get("/api/tasks/{task_id}/artifact/final-video")
 def final_video(task_id: str, download: bool = False) -> FileResponse:
     task = database.get_task(task_id)
