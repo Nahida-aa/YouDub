@@ -1,7 +1,7 @@
-import { reconstructPacket } from "#/io/binary.ts";
-import { Emitter } from "#/io/emitter.o.ts";
-import { isBinary } from "#/io/is-binary.ts";
-import { Packet, PacketType } from "#/io/types.ts";
+import { reconstructPacket } from "./binary.ts";
+import { Emitter } from "./emitter.o.ts";
+import { isBinary } from "./is-binary.ts";
+import { Packet, PacketType } from "./types.ts";
 
 /**
  * These strings must not be used as event names, as they have a special meaning.

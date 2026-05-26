@@ -2,7 +2,7 @@ import { deconstructPacket } from "./binary.ts";
 import { hasBinary } from "./is-binary.ts";
 import { Packet, PacketType } from "./types.ts";
 
-export const ioEncode = (obj: Packet) => {
+export const sioEncode = (obj: Packet) => {
   // debug("encoding packet %j", obj);
 
   if (obj.type === PacketType.EVENT || obj.type === PacketType.ACK) {
