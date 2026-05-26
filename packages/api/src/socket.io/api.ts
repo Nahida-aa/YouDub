@@ -12,4 +12,5 @@ io.bind(engine);
 io.on("connection", (socket) => {
   // ...
   console.log("New client connected:", socket.id);
+  socket.emit("welcome", { message: "Welcome to the WebSocket server!" });
 });
