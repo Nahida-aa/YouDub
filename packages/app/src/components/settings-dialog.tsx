@@ -28,6 +28,7 @@ import { m } from '@repo/shared/i18n/paraglide/messages';
 import { getLocale ,locales, setLocale } from '@repo/shared/i18n/paraglide/runtime';
 import { createForm } from '@tanstack/solid-form';
 import { useAppForm } from '@repo/ui-solid/form/useAppForm';
+import { cn } from '@repo/shared/lib/utils';
 
 	const localeNames: Record<string, string> = {
 		en: m.en?.(),
@@ -172,8 +173,9 @@ export function SettingsDialog() {
 
 	return (
 		<Dialog >
-			<DialogTrigger class={buttonVariants({ variant: 'ghost', size: 'icon' })}>
+			<DialogTrigger class={cn(buttonVariants({ variant: 'outline', class: 'bg-red-400' }))}>
 					<Settings class="size-4" />
+					{m.settings_button()}
 			</DialogTrigger>
 			<DialogContent size="2xl" showCloseButton>
 				<form.AppForm>
