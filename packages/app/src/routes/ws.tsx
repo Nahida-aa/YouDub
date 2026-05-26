@@ -4,6 +4,7 @@ import { io, Socket } from 'socket.io-client';
 import { Card, CardHeader, CardTitle, CardContent } from '@repo/ui-solid/base/card';
 import { Button } from '@repo/ui-solid/base/button';
 import { Badge } from '@repo/ui-solid/base/badge';
+import { socket } from '#/lib/ws.ts';
 
 export const Route = createFileRoute('/ws')({
   component: WsTestPage,
@@ -14,19 +15,10 @@ function WsTestPage() {
   const [status, setStatus] = createSignal<'connected' | 'disconnected' | 'connecting'>('disconnected');
   const [tasks, setTasks] = createSignal<any[]>([]);
   
-  let socket: Socket;
-
   onMount(() => {
     setStatus('connecting');
     
-    // 注意：这里连接的是你的 Hono API (packages/api)
-    // 即使后端是 Hono 的 WebSocket，socket.io-client 也可以在特定配置下工作，
-    // 或者我们直接模拟 socket.io 的行为。
-    // 但为了确保 100% 兼容你的 [event, data] 格式，我们使用 socket.io-client 的默认连接。
-    socket = io('http://localhost:9007', {
-      transports: ['websocket'], // 强制使用 websocket
-      path: '/ws'
-    });
+    socket.connect();
 
     socket.on('connect', () => {
       setStatus('connected');
@@ -39,7 +31,7 @@ function WsTestPage() {
     });
 
     // 监听任务列表更新
-    socket.on('tasks:list', (data) => {
+    socket.on('listTask', (data) => {
       console.log('Received tasks list:', data);
       setTasks(data.tasks || []);
       addMessage(`Received task list update (${data.tasks?.length || 0} tasks)`);

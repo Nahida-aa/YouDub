@@ -1,6 +1,6 @@
 import {  websocket } from 'hono/bun'
 import app from './app'
-// import { engine } from '#/socket.io/api.ts';
+import { engine } from '#/socket.io/api.ts';
 
 export default {
   port: 9007,

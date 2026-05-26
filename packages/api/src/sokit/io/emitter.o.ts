@@ -82,13 +82,15 @@ export class Emitter<
     return obj;
   }
 
+  private getEventKey = (event: string | symbol): string | symbol => typeof event === 'symbol' ? event : '$' + (event as string)
+
   /**
    * 监听事件
    */
   on<Ev extends ReservedOrUserEventNames<ReservedEvents, ListenEvents>>(
     event: Ev, 
     listener: ReservedOrUserListener<ReservedEvents, ListenEvents, Ev>): this {
-    const key = typeof event === 'symbol' ? event : '$' + event;
+    const key = this.getEventKey(event);
     let callbacks = this._callbacks.get(key);
     if (!callbacks) {
       callbacks = [];
@@ -98,76 +100,92 @@ export class Emitter<
     return this;
   }
 
+  addEventListener<Ev extends ReservedOrUserEventNames<ReservedEvents, ListenEvents>>(
+    event: Ev, 
+    listener: ReservedOrUserListener<ReservedEvents, ListenEvents, Ev>): this {
+    return this.on(event, listener);
+  }
+
   /**
    * 监听一次性事件
    */
-  once(event: string, fn: Callback): this {
+  once<Ev extends ReservedOrUserEventNames<ReservedEvents, ListenEvents>>(
+    event: Ev, 
+    listener: ReservedOrUserListener<ReservedEvents, ListenEvents, Ev>): this {
     const on = (...args: any[]) => {
-      this.off(event, on);
-      fn.apply(this, args);
+      this.off(event, on as any);
+      listener.apply(this, args);
     };
-    (on as any).fn = fn;
-    this.on(event, on);
+    (on as any).fn = listener;
+    this.on(event, on as any);
     return this;
   }
 
   /**
    * 移除监听器
    */
-  off(event?: string, fn?: Callback): this {
-    this._callbacks = this._callbacks || {};
-
+  off<Ev extends ReservedOrUserEventNames<ReservedEvents, ListenEvents>>(
+    event?: Ev, 
+    listener?: ReservedOrUserListener<ReservedEvents, ListenEvents, Ev>): this {
+    
     // 移除所有
     if (arguments.length === 0) {
-      this._callbacks = {};
+      this._callbacks.clear();
       return this;
     }
 
     // 移除特定事件的所有监听器
-    const key = '$' + event;
-    const callbacks = this._callbacks[key];
+    const key = this.getEventKey(event!);
+    const callbacks = this._callbacks.get(key);
     if (!callbacks) return this;
 
     if (arguments.length === 1) {
-      delete this._callbacks[key];
+      this._callbacks.delete(key);
       return this;
     }
 
     // 移除特定监听器
     for (let i = 0; i < callbacks.length; i++) {
       const cb = callbacks[i];
-      if (cb === fn || (cb as any).fn === fn) {
+      if (cb === listener || (cb as any).fn === listener) {
         callbacks.splice(i, 1);
         break;
       }
     }
 
     if (callbacks.length === 0) {
-      delete this._callbacks[key];
+      this._callbacks.delete(key);
     }
 
     return this;
   }
 
-  removeListener(event?: string, fn?: Callback): this {
-    return this.off(event, fn);
+  removeListener<Ev extends ReservedOrUserEventNames<ReservedEvents, ListenEvents>>(
+    event?: Ev, 
+    listener?: ReservedOrUserListener<ReservedEvents, ListenEvents, Ev>): this {
+    return this.off(event, listener);
   }
 
-  removeAllListeners(event?: string, fn?: Callback): this {
-    return this.off(event, fn);
+  removeAllListeners<Ev extends ReservedOrUserEventNames<ReservedEvents, ListenEvents>>(
+    event?: Ev, 
+    listener?: ReservedOrUserListener<ReservedEvents, ListenEvents, Ev>): this {
+    return this.off(event, listener);
   }
 
-  removeEventListener(event?: string, fn?: Callback): this {
-    return this.off(event, fn);
+  removeEventListener<Ev extends ReservedOrUserEventNames<ReservedEvents, ListenEvents>>(
+    event?: Ev, 
+    listener?: ReservedOrUserListener<ReservedEvents, ListenEvents, Ev>): this {
+    return this.off(event, listener);
   }
 
   /**
    * 触发事件
    */
-  emit(event: string, ...args: any[]): this {
-    this._callbacks = this._callbacks || {};
-    const key = '$' + event;
-    let callbacks = this._callbacks[key];
+  emit<Ev extends EventNames<EmitEvents>>(
+    event: Ev, 
+    ...args: EventParams<EmitEvents, Ev>): this {
+    const key = this.getEventKey(event);
+    let callbacks = this._callbacks.get(key);
 
     if (callbacks) {
       callbacks = callbacks.slice(0);
@@ -182,22 +200,36 @@ export class Emitter<
   /**
    * 触发保留事件（受保护方法别名）
    */
-  emitReserved(event: string, ...args: any[]): this {
-    return this.emit(event, ...args);
+  emitReserved<Ev extends EventNames<ReservedEvents>>(
+    event: Ev, 
+    ...args: EventParams<ReservedEvents, Ev>): this {
+    const key = this.getEventKey(event);
+    let callbacks = this._callbacks.get(key);
+
+    if (callbacks) {
+      callbacks = callbacks.slice(0);
+      for (let i = 0; i < callbacks.length; i++) {
+        callbacks[i].apply(this, args);
+      }
+    }
+
+    return this;
   }
 
   /**
    * 获取特定事件的所有监听器
    */
-  listeners(event: string): Callback[] {
-    this._callbacks = this._callbacks || {};
-    return this._callbacks['$' + event] || [];
+  listeners<Ev extends ReservedOrUserEventNames<ReservedEvents, ListenEvents>>(
+    event: Ev): ReservedOrUserListener<ReservedEvents, ListenEvents, Ev>[] {
+    const key = this.getEventKey(event);
+    return (this._callbacks.get(key) || []) as any;
   }
 
   /**
    * 检查是否有特定事件的监听器
    */
-  hasListeners(event: string): boolean {
+  hasListeners<Ev extends ReservedOrUserEventNames<ReservedEvents, ListenEvents>>(
+    event: Ev): boolean {
     return this.listeners(event).length > 0;
   }
 }
