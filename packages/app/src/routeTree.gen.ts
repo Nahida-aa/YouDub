@@ -9,9 +9,15 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WsRouteImport } from './routes/ws'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TasksIdRouteImport } from './routes/tasks.$id'
 
+const WsRoute = WsRouteImport.update({
+  id: '/ws',
+  path: '/ws',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -25,32 +31,43 @@ const TasksIdRoute = TasksIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/ws': typeof WsRoute
   '/tasks/$id': typeof TasksIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/ws': typeof WsRoute
   '/tasks/$id': typeof TasksIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/ws': typeof WsRoute
   '/tasks/$id': typeof TasksIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/tasks/$id'
+  fullPaths: '/' | '/ws' | '/tasks/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/tasks/$id'
-  id: '__root__' | '/' | '/tasks/$id'
+  to: '/' | '/ws' | '/tasks/$id'
+  id: '__root__' | '/' | '/ws' | '/tasks/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  WsRoute: typeof WsRoute
   TasksIdRoute: typeof TasksIdRoute
 }
 
 declare module '@tanstack/solid-router' {
   interface FileRoutesByPath {
+    '/ws': {
+      id: '/ws'
+      path: '/ws'
+      fullPath: '/ws'
+      preLoaderRoute: typeof WsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -70,6 +87,7 @@ declare module '@tanstack/solid-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  WsRoute: WsRoute,
   TasksIdRoute: TasksIdRoute,
 }
 export const routeTree = rootRouteImport
