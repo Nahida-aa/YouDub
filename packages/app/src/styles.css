@@ -1,3 +1,6 @@
 @import 'tailwindcss';
-@import '@repo/shared/styles/index.css';
+@import '../../shared/styles/index.css';
+
+@source '../../shared';
+@source '../../ui-solid';
 @source '.';
