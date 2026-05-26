@@ -1,7 +1,8 @@
 import { Hono } from 'hono'
 import { upgradeWebSocket } from 'hono/bun'
 import { SioPacketSchema, SubscribeSchema } from './types'
-import { ioEncode } from '#/socket.io/encode.ts';
+import { ioEncode } from '#/io/encode.ts';
+import { Decoder } from '#/io/decode.ts';
 const app = new Hono()
 const PYTHON_BACKEND = 'http://localhost:8000'
 // 存储活跃的订阅定时器，每个 WS 连接维护自己的订阅状态
@@ -11,7 +12,7 @@ app.get(
   '/ws/',
   upgradeWebSocket((c) => {
     const wsId = Math.random().toString(36).slice(2)
-    
+    const decoder = new Decoder();
     return {
       onOpen(event, ws) {
         const data = {
@@ -24,6 +25,10 @@ app.get(
           nsp: '/',
           data: {
             sid: wsId,
+            maxPayload: 1e6,
+            pingInterval: 25000,
+            pingTimeout: 20000,
+            upgrades: []
           }
         }
         const encoded = ioEncode(packet)
@@ -31,9 +36,14 @@ app.get(
           input: data,
           output: encoded
         })
-        encoded.forEach((item) => {
-          ws.send(item)
+        ws.send(encoded[0])
+        decoder.on("decoded", (packet) => {
+          console.log(`[WS] Decoded packet from ${wsId}:`, packet)
         })
+        // encoded.forEach((item) => {
+        //   console.log(`[WS] Sending to ${wsId}:`, item)
+        //   ws.send(item)
+        // })
         //         // 1. 发送 Engine.IO "OPEN" 包 (代码 0)
         // // 包含 sid, 升级选项, 心跳间隔和超时时间
         // const openPacket = {
@@ -51,7 +61,14 @@ app.get(
       onMessage(event, ws) {
         try {
           // 1. 验证 Socket.io 兼容格式: [event, data]
-          const rawData = JSON.parse(event.data.toString())
+          const rawText = event.data.toString()
+          const engineType = rawText[0]
+          const payloadString = rawText.slice(1) // 去掉 Engine.IO 的类型码
+          const rawData = JSON.parse(rawText)
+          console.log(`[WS] Received from ${wsId}:`, rawData)
+          if (engineType === '4') {
+
+          }
           const result = SioPacketSchema.safeParse(rawData)
           if (!result.success) return
 

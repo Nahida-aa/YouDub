@@ -1,6 +1,6 @@
-import { deconstructPacket } from "#/socket.io/binary.ts";
-import { hasBinary } from "#/socket.io/is-binary.ts";
-import { Packet, PacketType } from "#/socket.io/types.ts";
+import { deconstructPacket } from "./binary.ts";
+import { hasBinary } from "./is-binary.ts";
+import { Packet, PacketType } from "./types.ts";
 
 export const ioEncode = (obj: Packet) => {
   // debug("encoding packet %j", obj);
