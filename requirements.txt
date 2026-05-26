@@ -19,5 +19,4 @@ librosa
 audiostretchy
 numpy
 pytest
-httpx
-socksio
+httpx[socks]
