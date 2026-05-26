@@ -10,7 +10,7 @@ export enum PacketType {
 
 export interface Packet {
   type: PacketType;
-  nsp: string;
+  nsp?: string;
   data?: any;
   id?: number;
   attachments?: number;
