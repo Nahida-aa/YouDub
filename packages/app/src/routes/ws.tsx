@@ -1,6 +1,5 @@
 import { createFileRoute } from '@tanstack/solid-router';
 import { createSignal, onCleanup, onMount, For } from 'solid-js';
-import { io, Socket } from 'socket.io-client';
 import { Card, CardHeader, CardTitle, CardContent } from '@repo/ui-solid/base/card';
 import { Button } from '@repo/ui-solid/base/button';
 import { Badge } from '@repo/ui-solid/base/badge';
