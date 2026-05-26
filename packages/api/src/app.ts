@@ -1,24 +1,11 @@
 import { Hono } from 'hono'
-import { upgradeWebSocket, } from 'hono/bun'
 const app = new Hono()
+import wsApi from './ws/api'
 
 app.get('/', (c) => {
   return c.text('Hello Hono!')
-})
+}).route('', wsApi)
 
-app.get(
-  '/ws',
-  upgradeWebSocket((c) => {
-    return {
-      onMessage(event, ws) {
-        console.log(`Message from client: ${event.data}`)
-        ws.send('Hello from server!')
-      },
-      onClose: () => {
-        console.log('Connection closed')
-      },
-    }
-  })
-)
+
 
 export default app
