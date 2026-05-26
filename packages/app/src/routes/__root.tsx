@@ -1,4 +1,5 @@
 // import appCss from '@repo/shared/styles/index.css?url';
+import { Header } from '#/components/Header.tsx';
 import { Devtools } from '@repo/ui-solid/app/devtools';
 import { ThemeProvider, themeScript } from '@repo/ui-solid/theme';
 import type { QueryClient } from '@tanstack/solid-query';
@@ -33,20 +34,13 @@ function RootComponent() {
 			<div class="antialiased min-h-dvh flex flex-col">
 				<Suspense>
 					<ThemeProvider>
-						<header class="border-b border-border/60">
-							<div class="mx-auto flex h-12 max-w-4xl items-center gap-4 px-4">
-								<Link
-									to="/"
-									class="text-sm font-semibold hover:text-muted-foreground transition-colors"
-									activeOptions={{ exact: true }}
-								>
-									YouDub
-								</Link>
-							</div>
-						</header>
+						<div class="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+
+						<Header />
 						<main class="flex-1">
 							<Outlet />
 						</main>
+						</div>
 					</ThemeProvider>
 					<Devtools />
 				</Suspense>
