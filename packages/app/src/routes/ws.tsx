@@ -3,7 +3,7 @@ import { createSignal, onCleanup, onMount, For } from 'solid-js';
 import { Card, CardHeader, CardTitle, CardContent } from '@repo/ui-solid/base/card';
 import { Button } from '@repo/ui-solid/base/button';
 import { Badge } from '@repo/ui-solid/base/badge';
-import { socket } from '#/lib/ws.ts';
+import { socket } from '../lib/ws';
 
 export const Route = createFileRoute('/ws')({
   component: WsTestPage,
@@ -13,6 +13,8 @@ function WsTestPage() {
   const [messages, setMessages] = createSignal<string[]>([]);
   const [status, setStatus] = createSignal<'connected' | 'disconnected' | 'connecting'>('disconnected');
   const [tasks, setTasks] = createSignal<any[]>([]);
+  const [mlStatus, setMlStatus] = createSignal<any>(null);
+  const [progress, setProgress] = createSignal<{message: string, percent: number} | null>(null);
   
   onMount(() => {
     setStatus('connecting');
@@ -24,21 +26,19 @@ function WsTestPage() {
       addMessage('Connected to WebSocket server');
     });
 
+    socket.on('ml:voxcpm:status', (statusData: any) => {
+      setMlStatus(statusData);
+      addMessage(`VoxCPM Status: ${statusData.isReady ? 'Ready' : 'Not Ready'}`);
+    });
+
+    socket.on('ml:voxcpm:progress', (data: any) => {
+      setProgress(data);
+      addMessage(`[Progress] ${data.message} (${data.percent}%)`);
+    });
+
     socket.on('disconnect', () => {
       setStatus('disconnected');
       addMessage('Disconnected from server');
-    });
-
-    // 监听任务列表更新
-    socket.on('listTask', (data) => {
-      console.log('Received tasks list:', data);
-      setTasks(data.tasks || []);
-      addMessage(`Received task list update (${data.tasks?.length || 0} tasks)`);
-    });
-
-    // 监听特定任务的更新 (示例主题)
-    socket.on('tasks:detail:test_id', (data) => {
-      addMessage(`Detail update: ${JSON.stringify(data)}`);
     });
 
     onCleanup(() => {
@@ -46,24 +46,33 @@ function WsTestPage() {
     });
   });
 
+  const prepareModel = () => {
+    addMessage('Requesting model preparation...');
+    socket.emit('ml:voxcpm:prepare', {}, (response: any) => {
+      addMessage(`Server Ack: ${response.message} [${response.status}]`);
+    });
+  };
+
   const addMessage = (msg: string) => {
     setMessages(prev => [msg, ...prev].slice(0, 50));
   };
 
   const subscribeToList = () => {
-    addMessage('Subscribing to tasks:list...');
-    socket.emit('subscribe', { topic: 'tasks:list' });
+    addMessage('Subscribing to listTask...');
+    socket.emit('subscribe', { topic: 'listTask' });
   };
 
   const unsubscribeFromList = () => {
-    addMessage('Unsubscribing from tasks:list...');
-    socket.emit('unsubscribe', { topic: 'tasks:list' });
+    addMessage('Unsubscribing from listTask...');
+    socket.emit('unsubscribe', { topic: 'listTask' });
   };
 
   return (
     <div class="p-8 space-y-6">
       <div class="flex items-center justify-between">
-        <h1 class="text-2xl font-bold">WebSocket Socket.io Test</h1>
+        <h1 class="text-2xl font-bold">WebSocket Socket.io Test <Button onClick={()=> {
+          socket.emit('test:event', { timestamp: Date.now() })
+        }}>send msg</Button></h1>
         <Badge class={status() === 'connected' ? 'bg-green-500' : 'bg-red-500'}>
           {status()}
         </Badge>
@@ -75,6 +84,9 @@ function WsTestPage() {
             <CardTitle>Controls</CardTitle>
           </CardHeader>
           <CardContent class="space-x-4">
+            <Button onClick={prepareModel} disabled={status() !== 'connected' || mlStatus()?.isReady} class='h-9'>
+              Prepare VoxCPM Model
+            </Button>
             <Button onClick={subscribeToList} disabled={status() !== 'connected'}>
               Subscribe to List
             </Button>
@@ -86,19 +98,31 @@ function WsTestPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Live Tasks ({tasks().length})</CardTitle>
+            <CardTitle>Model Status</CardTitle>
           </CardHeader>
           <CardContent>
-            <div class="space-y-2">
-              <For each={tasks()}>
-                {(task) => (
-                  <div class="p-2 border rounded flex justify-between items-center">
-                    <span class="font-medium">{task.title || 'Untitled'}</span>
-                    <Badge variant="outline">{task.status}</Badge>
+            <div class="space-y-4">
+              <div class="flex justify-between items-center">
+                <span>VoxCPM Ready:</span>
+                <Badge class={mlStatus()?.isReady ? 'bg-green-500' : 'bg-yellow-500'}>
+                  {mlStatus()?.isReady ? 'READY' : 'NOT READY'}
+                </Badge>
+              </div>
+              
+              {progress() && (
+                <div class="space-y-2">
+                  <div class="flex justify-between text-xs">
+                    <span>{progress()?.message}</span>
+                    <span>{progress()?.percent}%</span>
                   </div>
-                )}
-              </For>
-              {tasks().length === 0 && <p class="text-muted-foreground italic">No tasks active</p>}
+                  <div class="w-full bg-secondary h-2 rounded-full overflow-hidden">
+                    <div 
+                      class="bg-primary h-full transition-all duration-300" 
+                      style={{ width: `${progress()?.percent}%` }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

@@ -8,7 +8,6 @@ export const SioPacketSchema = z.tuple([
   z.any()     // Data
 ]);
 
-export type SioPacket = z.infer<typeof SioPacketSchema>;
 
 // --- 业务数据模型 ---
 
