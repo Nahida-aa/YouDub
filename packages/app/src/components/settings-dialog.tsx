@@ -68,11 +68,13 @@ export function SettingsDialog() {
 	const [open, setOpen] = createSignal(false);
 	const form = useAppForm(() => ({
 		defaultValues: defaultSettings,
-		onSubmit: async ({ value }) => {
+		onSubmit: async ({ value, formApi }) => {
 			setMessage('');
 			try {
-				if (cookieDirty()) {
-					await saveCookie(cookie() === SAVED_COOKIE_SENTINEL ? '' : cookie());
+				if (formApi.getFieldMeta('cookie')?.isDirty) {
+					await saveCookie(
+						value.cookie === SAVED_COOKIE_SENTINEL ? '' : value.cookie,
+					);
 				}
 				const clearApiKey = apiKeyDirty() && !apiKey().trim();
 				const result = await saveOpenAISettings({
@@ -137,36 +139,6 @@ export function SettingsDialog() {
 				setMessage(err instanceof Error ? err.message : '加载设置失败');
 			});
 	});
-
-	async function handleSubmit(event: SubmitEvent) {
-		event.preventDefault();
-		setMessage('');
-		try {
-			if (cookieDirty()) {
-				await saveCookie(cookie() === SAVED_COOKIE_SENTINEL ? '' : cookie());
-			}
-			const clearApiKey = apiKeyDirty() && !apiKey().trim();
-			const result = await saveOpenAISettings({
-				base_url: baseUrl(),
-				api_key: apiKeyDirty() ? apiKey() : '',
-				clear_api_key: clearApiKey,
-				model: model(),
-				translate_concurrency: translateConcurrency(),
-			});
-			const ytdlp = await saveYtdlpSettings({ proxy_port: proxyPort() });
-			setMessage('已保存');
-			setApiKey(result.has_api_key ? result.api_key || SAVED_API_KEY_MASK : '');
-			setTranslateConcurrency(
-				result.translate_concurrency || translateConcurrency(),
-			);
-			setProxyPort(ytdlp.proxy_port);
-			setCookieDirty(false);
-			setApiKeyDirty(false);
-		} catch (err) {
-			setMessage(err instanceof Error ? err.message : '保存失败');
-		}
-	}
-
 	async function handleFetchModels() {
 		setMessage('');
 		setModelsLoading(true);
@@ -196,6 +168,7 @@ export function SettingsDialog() {
 				class={cn(
 					buttonVariants({
 						variant: 'outline',
+						// class: 'rounded-xs',
 					}),
 				)}
 			>
@@ -226,34 +199,16 @@ export function SettingsDialog() {
 										placeholder="7890"
 									/>
 								</div>
-								<div class="grid gap-2">
-									<Label for="cookie">YouTube Cookie</Label>
-									<Textarea
-										id="cookie"
-										value={cookieValue()}
-										onFocus={(e) => {
-											if (
-												!cookieDirty() &&
-												cookie() === SAVED_COOKIE_SENTINEL
-											) {
-												e.currentTarget.select();
-											}
-										}}
-										onInput={(e) => {
-											setCookieDirty(true);
-											setCookie(
-												cookie() === SAVED_COOKIE_SENTINEL
-													? e.currentTarget.value.replace(
-															'已保存 Cookie（点击可修改）',
-															'',
-														)
-													: e.currentTarget.value,
-											);
-										}}
-										placeholder="粘贴 Netscape 格式的 YouTube Cookie"
-										class="min-h-44 max-h-[42dvh] overflow-auto font-mono text-xs leading-relaxed"
-									/>
-								</div>
+								<form.AppField
+									name="cookie"
+									children={(field) => (
+										<field.TextareaField
+											title="YouTube Cookie"
+											placeholder="粘贴 Netscape 格式的 YouTube Cookie"
+											class="min-h-44 overflow-auto"
+										/>
+									)}
+								/>
 								<div class="grid gap-2">
 									<Label for="baseUrl">API Base URL</Label>
 									<Input
@@ -345,7 +300,7 @@ export function SettingsDialog() {
 							</div>
 						</div>
 						<DialogFooter class="shrink-0">
-							<Button type="submit">保存</Button>
+							<form.SubmitButton label="保存" />
 						</DialogFooter>
 					</form.Form>
 				</form.AppForm>

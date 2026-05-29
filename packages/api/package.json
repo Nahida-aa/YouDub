@@ -1,17 +1,24 @@
 {
-  "name": "api",
+  "name": "@repo/api",
   "imports": {
     "#/*": "./src/*"
   },
   "scripts": {
-    "dev": "bun run --hot src/index.ts"
+    "dev": "bun run --hot src/index.ts",
+    "db:pull": "drizzle-kit pull",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",
     "@repo/shared": "workspace:*",
     "@socket.io/bun-engine": "^0.1.1",
     "@types/cors": "^2.8.19",
+    "agnostic-query": "^1.9.2",
     "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.45.2",
+    "drizzle-zod": "^0.8.3",
+    "find-up": "^8.0.0",
     "hono": "^4.12.23",
     "onnxruntime-node": "^1.26.0",
     "siokit": "^0.1.4",
@@ -20,6 +27,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "better-sqlite3": "^12.10.0",
+    "drizzle-kit": "^0.31.10"
   }
 }

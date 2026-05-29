@@ -13,6 +13,7 @@
     "skipLibCheck": true,
     "target": "ESNext",
     "allowJs": true,
+    "types": ["vite/client"],
     "forceConsistentCasingInFileNames": true,
     "noEmit": true
   }

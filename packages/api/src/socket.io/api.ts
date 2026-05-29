@@ -1,6 +1,13 @@
 import { Server as Engine } from '@socket.io/bun-engine';
 import { Server } from 'socket.io';
+import { sqlite } from '#/db/index.ts';
 import { engine, io } from '#/socket.io/io.ts';
+import {
+	applyTransaction,
+	assertCollection,
+	listCollectionRows,
+} from '#/ws/collect.ts';
+import type { TransactionPayload } from '#/ws/types.ts';
 import { downloadVoxCPM } from '../ml/voxcpm/download';
 import { checkVoxCPMStatus } from '../ml/voxcpm/load';
 
@@ -18,6 +25,30 @@ io.on('connection', async (socket) => {
 
 	// 发送欢迎消息
 	socket.emit('echo', { hello: 'Welcome to YouDub WebSocket API' });
+
+	socket.on('sync', ({ id }) => {
+		try {
+			assertCollection(id);
+			socket.emit('sync', listCollectionRows(id));
+		} catch (error) {
+			console.error('[WS] Sync failed:', error);
+			socket.emit('sync', []);
+		}
+	});
+
+	socket.on('transaction', (payload, callback) => {
+		try {
+			applyTransaction(payload);
+			io.emit('transaction', payload);
+			callback({ ok: true });
+		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : 'Unknown transaction error';
+			console.error('[WS] Transaction failed:', error);
+			callback({ ok: false, error: message });
+		}
+	});
+
 	socket.on('test:event', (data) => {
 		console.log('Received test:event with data:', data);
 		socket.emit('test:event', { message: 'Test event received!' });
@@ -87,11 +118,11 @@ io.on('connection', async (socket) => {
 					// 更新状态给所有客户端
 					const finalStatus = await checkVoxCPMStatus();
 					io.emit('ml:voxcpm:status', finalStatus);
-				} catch (error: any) {
+				} catch (error: unknown) {
 					console.error('[WS] Download failed:', error);
 					voxcpmPrepareTask.status = 'error';
 					voxcpmPrepareTask.progress = {
-						message: `Download failed: ${error.message}`,
+						message: `Download failed: ${error instanceof Error ? error.message : 'Unknown download error'}`,
 						percent: 0,
 					};
 					io.emit('ml:voxcpm:progress', voxcpmPrepareTask.progress);

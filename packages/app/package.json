@@ -20,14 +20,18 @@
   "dependencies": {
     "@inlang/paraglide-js": "^2.18.1",
     "@kobalte/core": "^0.13.11",
+    "@repo/api": "workspace:*",
     "@repo/shared": "workspace:*",
     "@repo/ui-solid": "workspace:*",
+    "@standard-schema/spec": "^1.1.0",
     "@tailwindcss/vite": "^4.3.0",
     "@tanstack/devtools-vite": "^0.7.0",
     "@tanstack/router-plugin": "^1.168.8",
+    "@tanstack/solid-db": "^0.2.21",
     "@tanstack/solid-form": "^1.32.0",
     "@tanstack/solid-query": "^5.100.11",
     "@tanstack/solid-router": "^1.170.6",
+    "@tanstack/solid-store": "^0.11.0",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
     "class-variance-authority": "^0.7.1",
@@ -35,11 +39,13 @@
     "socket.io-client": "^4.8.3",
     "solid-js": "^1.9.3",
     "tailwindcss": "^4.3.0",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "z": "^1.0.9",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "typescript": "~6",
-    "vite": "^8",
+    "vite": "^8.0.14",
     "vite-plugin-solid": "^2.11.0",
     "@tauri-apps/cli": "^2"
   }

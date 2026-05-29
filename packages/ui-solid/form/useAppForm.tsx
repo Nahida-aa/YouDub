@@ -1,6 +1,6 @@
 import { createFormHook } from '@tanstack/solid-form';
 import type { VariantProps } from 'class-variance-authority';
-
+import { createEffect, splitProps } from 'solid-js';
 import {
 	Form,
 	FormFloatingSaveBar,
@@ -11,18 +11,25 @@ import {
 	SyncToLocalStorage,
 	useFieldContext,
 } from './form';
-import { InputField, InputFieldProps, TextareaField, TextareaProps } from './text/InputField';
+import {
+	InputField,
+	type InputFieldProps,
+	InputGroupTextareaField,
+	type InputGroupTextareaProps,
+	TextareaField,
+	type TextareaProps,
+} from './text/InputField';
 import { PasswordField } from './text/PasswordField';
-import { createEffect, splitProps } from 'solid-js';
 
 export const { useAppForm } = createFormHook({
 	fieldContext,
 	formContext,
 	fieldComponents: {
 		InputField: (props: Omit<InputFieldProps, 'fieldId'>) => {
-			const [local, others] = splitProps(props, ['invalid',     'errors', ]);
-			const field = useFieldContext<string | undefined>()
-			const invalid = () => !field().state.meta.isValid && field().state.meta.isTouched;
+			const [local, others] = splitProps(props, ['invalid', 'errors']);
+			const field = useFieldContext<string | undefined>();
+			const invalid = () =>
+				!field().state.meta.isValid && field().state.meta.isTouched;
 			return (
 				<InputField
 					{...others}
@@ -36,9 +43,10 @@ export const { useAppForm } = createFormHook({
 			);
 		},
 		TextareaField: (props: Omit<TextareaProps, 'fieldId'>) => {
-			const [local, others] = splitProps(props, ['invalid',     'errors', ]);
-			const field = useFieldContext<string | undefined>()
-			const invalid = () => !field().state.meta.isValid && field().state.meta.isTouched;
+			const [local, others] = splitProps(props, ['invalid', 'errors']);
+			const field = useFieldContext<string | undefined>();
+			const invalid = () =>
+				!field().state.meta.isValid && field().state.meta.isTouched;
 			return (
 				<TextareaField
 					{...others}
@@ -51,7 +59,26 @@ export const { useAppForm } = createFormHook({
 				/>
 			);
 		},
-		PasswordField
+		InputGroupTextareaField: (
+			props: Omit<InputGroupTextareaProps, 'fieldId'>,
+		) => {
+			const [local, others] = splitProps(props, ['invalid', 'errors']);
+			const field = useFieldContext<string | undefined>();
+			const invalid = () =>
+				!field().state.meta.isValid && field().state.meta.isTouched;
+			return (
+				<InputGroupTextareaField
+					{...others}
+					name={field().name}
+					value={field().state.value}
+					onBlur={field().handleBlur}
+					onInput={(e) => field().handleChange(e.target.value)}
+					invalid={invalid()}
+					errors={field().state.meta.errors}
+				/>
+			);
+		},
+		PasswordField,
 	},
 	formComponents: {
 		NextButton,

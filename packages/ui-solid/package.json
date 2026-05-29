@@ -18,6 +18,8 @@
     "solid-sonner": "^0.3.1",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.0",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "vite": "^8.0.14",
+    "vite-plugin-solid": "^2.11.12"
   }
 }

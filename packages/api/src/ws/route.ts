@@ -1,6 +1,11 @@
 import { newServer } from 'siokit';
+import { save_youtube_cookie } from '#/settings/cookie.ts';
 import { io } from '#/ws/io.ts';
-import type { ClientToServerEvents, ServerToClientEvents } from '#/ws/types.ts';
+import {
+	type ClientToServerEvents,
+	errorHandler,
+	type ServerToClientEvents,
+} from '#/ws/types.ts';
 import { downloadVoxCPM } from '../ml/voxcpm/download';
 import { checkVoxCPMStatus } from '../ml/voxcpm/load';
 
@@ -15,6 +20,13 @@ const voxcpmPrepareTask: {
 
 io.on('connection', async (socket) => {
 	console.log('New client connected:', socket.id);
+
+	socket.on(
+		'save_youtube_cookie',
+		errorHandler(async (input) => {
+			return await save_youtube_cookie(input);
+		}),
+	);
 
 	// 发送欢迎消息
 	socket.emit('echo', { hello: 'Welcome to YouDub WebSocket API' });
@@ -88,11 +100,13 @@ io.on('connection', async (socket) => {
 					// 更新状态给所有客户端
 					const finalStatus = await checkVoxCPMStatus();
 					io.emit('ml:voxcpm:status', finalStatus);
-				} catch (error: any) {
+				} catch (error: unknown) {
+					const message =
+						error instanceof Error ? error.message : 'Unknown download error';
 					console.error('[WS] Download failed:', error);
 					voxcpmPrepareTask.status = 'error';
 					voxcpmPrepareTask.progress = {
-						message: `Download failed: ${error.message}`,
+						message: `Download failed: ${message}`,
 						percent: 0,
 					};
 					io.emit('ml:voxcpm:progress', voxcpmPrepareTask.progress);
@@ -108,8 +122,8 @@ io.on('connection', async (socket) => {
 		}
 	});
 
-	socket.on('disconnect', () => {
-		console.log('Client disconnected:', socket.id);
+	socket.on('disconnect', (reason) => {
+		console.log('Client disconnected:', socket.id, 'Reason:', reason);
 	});
 });
 
