@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
 import { upgradeWebSocket } from 'hono/bun';
 import { newServer, type WsSession } from 'siokit';
-import { io } from '#/ws/io.ts';
+import { io } from '#/ws/route.ts';
+
+// import { io } from '#/ws/io.ts';
 
 const app = new Hono();
 

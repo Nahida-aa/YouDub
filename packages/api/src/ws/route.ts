@@ -1,4 +1,6 @@
+import { newServer } from 'siokit';
 import { io } from '#/ws/io.ts';
+import type { ClientToServerEvents, ServerToClientEvents } from '#/ws/types.ts';
 import { downloadVoxCPM } from '../ml/voxcpm/download';
 import { checkVoxCPMStatus } from '../ml/voxcpm/load';
 
@@ -15,7 +17,7 @@ io.on('connection', async (socket) => {
 	console.log('New client connected:', socket.id);
 
 	// 发送欢迎消息
-	socket.emit('welcome', { message: 'Welcome to YouDub WebSocket API' });
+	socket.emit('echo', { hello: 'Welcome to YouDub WebSocket API' });
 	socket.on('test:event', (data) => {
 		console.log('Received test:event with data:', data);
 		socket.emit('test:event', { message: 'Test event received!' });
@@ -41,6 +43,7 @@ io.on('connection', async (socket) => {
 
 	// 处理模型准备请求 (请求-响应模式)
 	socket.on('ml:voxcpm:prepare', async (data, callback) => {
+		console.log('Received ml:voxcpm:prepare request from client:', socket.id);
 		if (voxcpmPrepareTask.status === 'processing') {
 			return callback({
 				status: 'error',
@@ -109,3 +112,5 @@ io.on('connection', async (socket) => {
 		console.log('Client disconnected:', socket.id);
 	});
 });
+
+export { io };
