@@ -1,15 +1,27 @@
-import { createFileRoute, Link, useNavigate } from '@tanstack/solid-router';
-import { createSignal, For, Show } from 'solid-js';
-import { createQuery, useQueryClient } from '@tanstack/solid-query';
-import { Play, Upload, ChevronRight } from 'lucide-solid';
-import { Button } from '@repo/ui-solid/base/button';
 import { Badge } from '@repo/ui-solid/base/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui-solid/base/card';
+import { Button } from '@repo/ui-solid/base/button';
+import {
+	Card,
+	CardContent,
+	CardHeader,
+	CardTitle,
+} from '@repo/ui-solid/base/card';
 import { Input } from '@repo/ui-solid/base/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@repo/ui-solid/base/select';
 import { Label } from '@repo/ui-solid/base/label';
-import type { LocalDirection } from '../lib/api';
-import { listTasks, createTask, uploadLocalTask } from '../lib/api';
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from '@repo/ui-solid/base/select';
+import { useLiveQuery } from '@tanstack/solid-db';
+import { createFileRoute, Link, useNavigate } from '@tanstack/solid-router';
+import { ChevronRight, Play, Upload } from 'lucide-solid';
+import { createSignal, For, onMount, Show } from 'solid-js';
+import { tasksCollect, tasksQ } from '#/feat/tasks/sync.ts';
+import type { LocalDirection, TaskSummary } from '../lib/api';
+import { createTask, listTasks, uploadLocalTask } from '../lib/api';
 
 export const Route = createFileRoute('/')({
 	component: Home,
@@ -17,11 +29,16 @@ export const Route = createFileRoute('/')({
 
 function statusBadgeClass(status?: string): string {
 	switch (status) {
-		case 'succeeded': return 'bg-blue-500/10 text-blue-600 border-blue-200';
-		case 'failed': return 'bg-red-500/10 text-red-600 border-red-200';
-		case 'running': return 'bg-pink-500/10 text-pink-600 border-pink-200';
-		case 'queued': return 'bg-amber-500/10 text-amber-600 border-amber-200';
-		default: return 'bg-muted text-muted-foreground';
+		case 'succeeded':
+			return 'bg-blue-500/10 text-blue-600 border-blue-200';
+		case 'failed':
+			return 'bg-red-500/10 text-red-600 border-red-200';
+		case 'running':
+			return 'bg-pink-500/10 text-pink-600 border-pink-200';
+		case 'queued':
+			return 'bg-amber-500/10 text-amber-600 border-amber-200';
+		default:
+			return 'bg-muted text-muted-foreground';
 	}
 }
 
@@ -66,25 +83,16 @@ function shortUrl(url: string) {
 }
 
 function Home() {
-	console.log("Home 组件函数执行了！");
 	const navigate = useNavigate();
-	const queryClient = useQueryClient();
-	const tasksQuery = createQuery(() => ({
-		queryKey: ['tasks'],
-		queryFn: async () => {
-			const { tasks: list } = await listTasks();
-			return list;
-		},
-		refetchInterval: 2000,
-	}));
-	const tasks = () => tasksQuery.data || [];
+	const tasks = useLiveQuery((q) => tasksQ(q));
 
 	const [error, setError] = createSignal('');
 	const [submitting, setSubmitting] = createSignal(false);
 	const [youtubeUrl, setYoutubeUrl] = createSignal('');
 	const [bilibiliUrl, setBilibiliUrl] = createSignal('');
 	const [localFile, setLocalFile] = createSignal<File | null>(null);
-	const [localDirection, setLocalDirection] = createSignal<LocalDirection>('en-zh');
+	const [localDirection, setLocalDirection] =
+		createSignal<LocalDirection>('en-zh');
 	let fileInputRef!: HTMLInputElement;
 
 	function selectLocalFile(event: Event) {
@@ -107,7 +115,6 @@ function Home() {
 			setBilibiliUrl('');
 			setLocalFile(null);
 			if (fileInputRef) fileInputRef.value = '';
-			queryClient.invalidateQueries({ queryKey: ['tasks'] });
 			navigate({ to: '/tasks/$id', params: { id: created.id } });
 		} catch (err) {
 			setError(err instanceof Error ? err.message : '创建失败');
@@ -118,15 +125,16 @@ function Home() {
 
 	const hasUrl = () => Boolean(youtubeUrl().trim() || bilibiliUrl().trim());
 	const hasLocalFile = () => Boolean(localFile());
-	const canSubmit = () => Boolean((hasUrl() || hasLocalFile()) && !submitting());
+	const canSubmit = () =>
+		Boolean((hasUrl() || hasLocalFile()) && !submitting());
 	const queuedCount = () => tasks().filter((t) => isActive(t.status)).length;
-const directionLabels: Record<string, string> = {
-  'en-zh': '英 → 中',
-  'zh-en': '中 → 英',
-};
+	const directionLabels: Record<string, string> = {
+		'en-zh': '英 → 中',
+		'zh-en': '中 → 英',
+	};
+	console.log('Home component rendered');
 	return (
 		<div class="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-
 			<Card>
 				<CardHeader>
 					<CardTitle>创建任务</CardTitle>
@@ -167,24 +175,27 @@ const directionLabels: Record<string, string> = {
 							</div>
 							<div class="space-y-2">
 								<Label for="local-direction">翻译方向</Label>
-			<Select
-  options={['en-zh', 'zh-en']}
-  value={localDirection()}
-  onChange={(v) => setLocalDirection(v as LocalDirection)}
-  disabled={hasUrl()}
-  itemComponent={(props) => (
-    <SelectItem item={props.item}>
-      {directionLabels[props.item.rawValue]}
-    </SelectItem>
-  )}
->
-  <SelectTrigger id="local-direction">
-    <SelectValue<string>>
-      {(state) => directionLabels[state.selectedOption()] ?? state.selectedOption()}
-    </SelectValue>
-  </SelectTrigger>
-  <SelectContent />
-</Select>
+								<Select
+									options={['en-zh', 'zh-en']}
+									value={localDirection()}
+									onChange={(v) => setLocalDirection(v as LocalDirection)}
+									disabled={hasUrl()}
+									itemComponent={(props) => (
+										<SelectItem item={props.item}>
+											{directionLabels[props.item.rawValue]}
+										</SelectItem>
+									)}
+								>
+									<SelectTrigger id="local-direction">
+										<SelectValue<string>>
+											{(state) =>
+												directionLabels[state.selectedOption()] ??
+												state.selectedOption()
+											}
+										</SelectValue>
+									</SelectTrigger>
+									<SelectContent />
+								</Select>
 							</div>
 						</div>
 						<div class="flex items-center justify-between gap-3">
@@ -243,7 +254,9 @@ const directionLabels: Record<string, string> = {
 														{statusLabel(item.status)}
 													</Badge>
 													<span>{formatTime(item.created_at)}</span>
-													<Show when={isActive(item.status) && item.current_stage}>
+													<Show
+														when={isActive(item.status) && item.current_stage}
+													>
 														<span>· {stageLabel(item.current_stage!)}</span>
 													</Show>
 												</div>

@@ -5,7 +5,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import type { Component, ComponentProps, JSX, ValidComponent } from 'solid-js';
 import { splitProps } from 'solid-js';
 export const dialogContentVariants = cva(
-	'bg-background data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 fixed z-50 shadow-lg outline-none duration-100 ',
+	'bg-background data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 fixed z-50 shadow-lg outline-none duration-100 p-4',
 	{
 		variants: {
 			size: {
@@ -52,7 +52,7 @@ const DialogOverlay = <T extends ValidComponent = 'div'>(
 	return (
 		<DialogPrimitive.Overlay
 			class={cn(
-				'fixed inset-0 z-50 bg-background/80 data-[expanded]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[expanded]:fade-in-0',
+				'fixed inset-0 z-50 bg-crust/80 data-[expanded]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[expanded]:fade-in-0',
 				props.class,
 			)}
 			{...rest}
@@ -61,20 +61,23 @@ const DialogOverlay = <T extends ValidComponent = 'div'>(
 };
 
 type DialogContentProps<T extends ValidComponent = 'div'> =
-	DialogPrimitive.DialogContentProps<T> & VariantProps<typeof dialogContentVariants> & {
-		class?: string | undefined;
-		children?: JSX.Element;
-				showCloseButton?: boolean;
-		pending?: boolean;
-	};
+	DialogPrimitive.DialogContentProps<T> &
+		VariantProps<typeof dialogContentVariants> & {
+			class?: string | undefined;
+			children?: JSX.Element;
+			showCloseButton?: boolean;
+			pending?: boolean;
+		};
 
-const DialogContent = <T extends ValidComponent = 'div'>(props: PolymorphicProps<T, DialogContentProps<T>> &
-	VariantProps<typeof dialogContentVariants> ) => {
+const DialogContent = <T extends ValidComponent = 'div'>(
+	props: PolymorphicProps<T, DialogContentProps<T>> &
+		VariantProps<typeof dialogContentVariants>,
+) => {
 	const [local, rest] = splitProps(props as DialogContentProps, [
 		'class',
 		'children',
 		'size',
-		'showCloseButton'
+		'showCloseButton',
 	]);
 	return (
 		<DialogPortal>

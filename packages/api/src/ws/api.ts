@@ -29,3 +29,4 @@ app.get(
 	}),
 );
 export default app;
+export { io };

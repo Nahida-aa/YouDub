@@ -8,7 +8,11 @@ import {
 } from '@repo/ui-solid/base/card';
 import { createFileRoute } from '@tanstack/solid-router';
 import { createSignal, For, onCleanup, onMount } from 'solid-js';
-import { socket } from '../lib/ws';
+import {
+	SocketIndicator,
+	useSocketState,
+} from '#/components/socket/SocketMount.tsx';
+import { socket } from '../components/socket/ws';
 
 export const Route = createFileRoute('/ws')({
 	component: WsTestPage,
@@ -16,10 +20,8 @@ export const Route = createFileRoute('/ws')({
 
 function WsTestPage() {
 	const [messages, setMessages] = createSignal<string[]>([]);
-	const [status, setStatus] = createSignal<
-		'connected' | 'disconnected' | 'connecting'
-	>('disconnected');
-	const [tasks, setTasks] = createSignal<any[]>([]);
+	const status = useSocketState();
+
 	const [mlStatus, setMlStatus] = createSignal<any>(null);
 	const [progress, setProgress] = createSignal<{
 		message: string;
@@ -27,17 +29,10 @@ function WsTestPage() {
 	} | null>(null);
 
 	onMount(() => {
-		setStatus('connecting');
-
-		socket.connect();
-
 		socket.on('connect', () => {
-			setStatus('connected');
 			addMessage('Connected to WebSocket server');
 		});
-		socket.onAny((event, ...args) => {
-			console.log(event, args); // 这里可以看到所有事件和数据，方便调试
-		});
+
 		socket.on('ml:voxcpm:status', (statusData) => {
 			setMlStatus(statusData);
 			addMessage(
@@ -51,12 +46,7 @@ function WsTestPage() {
 		});
 
 		socket.on('disconnect', () => {
-			setStatus('disconnected');
 			addMessage('Disconnected from server');
-		});
-
-		onCleanup(() => {
-			socket.disconnect();
 		});
 	});
 
@@ -94,9 +84,8 @@ function WsTestPage() {
 						send msg
 					</Button>
 				</h1>
-				<Badge class={status() === 'connected' ? 'bg-green-500' : 'bg-red-500'}>
-					{status()}
-				</Badge>
+
+				<SocketIndicator />
 			</div>
 
 			<div class="grid grid-cols-1 md:grid-cols-2 gap-6">

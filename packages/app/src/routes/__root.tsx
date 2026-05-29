@@ -1,5 +1,5 @@
 // import appCss from '@repo/shared/styles/index.css?url';
-import { Header } from '#/components/Header.tsx';
+
 import { Devtools } from '@repo/ui-solid/app/devtools';
 import { ThemeProvider, themeScript } from '@repo/ui-solid/theme';
 import type { QueryClient } from '@tanstack/solid-query';
@@ -10,6 +10,8 @@ import {
 	Outlet,
 } from '@tanstack/solid-router';
 import { type JSX, Suspense } from 'solid-js';
+import { Header } from '#/components/Header.tsx';
+import { SocketMount } from '#/components/socket/SocketMount.tsx';
 
 export const Route = createRootRouteWithContext<{
 	queryClient: QueryClient;
@@ -33,15 +35,16 @@ function RootComponent() {
 			<HeadContent />
 			<div class="antialiased min-h-dvh flex flex-col">
 				<Suspense>
+					<SocketMount />
 					<ThemeProvider>
 						<div class="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-
-						<Header />
-						<main class="flex-1">
-							<Outlet />
-						</main>
+							<Header />
+							<main class="flex-1">
+								<Outlet />
+							</main>
 						</div>
 					</ThemeProvider>
+
 					<Devtools />
 				</Suspense>
 			</div>
