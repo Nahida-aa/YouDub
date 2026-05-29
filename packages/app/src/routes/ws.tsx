@@ -1,145 +1,177 @@
-import { createFileRoute } from '@tanstack/solid-router';
-import { createSignal, onCleanup, onMount, For } from 'solid-js';
-import { Card, CardHeader, CardTitle, CardContent } from '@repo/ui-solid/base/card';
-import { Button } from '@repo/ui-solid/base/button';
 import { Badge } from '@repo/ui-solid/base/badge';
+import { Button } from '@repo/ui-solid/base/button';
+import {
+	Card,
+	CardContent,
+	CardHeader,
+	CardTitle,
+} from '@repo/ui-solid/base/card';
+import { createFileRoute } from '@tanstack/solid-router';
+import { createSignal, For, onCleanup, onMount } from 'solid-js';
 import { socket } from '../lib/ws';
 
 export const Route = createFileRoute('/ws')({
-  component: WsTestPage,
+	component: WsTestPage,
 });
 
 function WsTestPage() {
-  const [messages, setMessages] = createSignal<string[]>([]);
-  const [status, setStatus] = createSignal<'connected' | 'disconnected' | 'connecting'>('disconnected');
-  const [tasks, setTasks] = createSignal<any[]>([]);
-  const [mlStatus, setMlStatus] = createSignal<any>(null);
-  const [progress, setProgress] = createSignal<{message: string, percent: number} | null>(null);
-  
-  onMount(() => {
-    setStatus('connecting');
-    
-    socket.connect();
+	const [messages, setMessages] = createSignal<string[]>([]);
+	const [status, setStatus] = createSignal<
+		'connected' | 'disconnected' | 'connecting'
+	>('disconnected');
+	const [tasks, setTasks] = createSignal<any[]>([]);
+	const [mlStatus, setMlStatus] = createSignal<any>(null);
+	const [progress, setProgress] = createSignal<{
+		message: string;
+		percent: number;
+	} | null>(null);
 
-    socket.on('connect', () => {
-      setStatus('connected');
-      addMessage('Connected to WebSocket server');
-    });
+	onMount(() => {
+		setStatus('connecting');
 
-    socket.on('ml:voxcpm:status', (statusData: any) => {
-      setMlStatus(statusData);
-      addMessage(`VoxCPM Status: ${statusData.isReady ? 'Ready' : 'Not Ready'}`);
-    });
+		socket.connect();
 
-    socket.on('ml:voxcpm:progress', (data: any) => {
-      setProgress(data);
-      addMessage(`[Progress] ${data.message} (${data.percent}%)`);
-    });
+		socket.on('connect', () => {
+			setStatus('connected');
+			addMessage('Connected to WebSocket server');
+		});
+		socket.onAny((event, ...args) => {
+			console.log(event, args); // 这里可以看到所有事件和数据，方便调试
+		});
+		socket.on('ml:voxcpm:status', (statusData) => {
+			setMlStatus(statusData);
+			addMessage(
+				`VoxCPM Status: ${statusData.isReady ? 'Ready' : 'Not Ready'}`,
+			);
+		});
 
-    socket.on('disconnect', () => {
-      setStatus('disconnected');
-      addMessage('Disconnected from server');
-    });
+		socket.on('ml:voxcpm:progress', (data: any) => {
+			setProgress(data);
+			addMessage(`[Progress] ${data.message} (${data.percent}%)`);
+		});
 
-    onCleanup(() => {
-      socket.disconnect();
-    });
-  });
+		socket.on('disconnect', () => {
+			setStatus('disconnected');
+			addMessage('Disconnected from server');
+		});
 
-  const prepareModel = () => {
-    addMessage('Requesting model preparation...');
-    socket.emit('ml:voxcpm:prepare', {}, (response: any) => {
-      addMessage(`Server Ack: ${response.message} [${response.status}]`);
-    });
-  };
+		onCleanup(() => {
+			socket.disconnect();
+		});
+	});
 
-  const addMessage = (msg: string) => {
-    setMessages(prev => [msg, ...prev].slice(0, 50));
-  };
+	const prepareModel = () => {
+		addMessage('Requesting model preparation...');
+		socket.emit('ml:voxcpm:prepare', {}, (response: any) => {
+			addMessage(`Server Ack: ${response.message} [${response.status}]`);
+		});
+	};
 
-  const subscribeToList = () => {
-    addMessage('Subscribing to listTask...');
-    socket.emit('subscribe', { topic: 'listTask' });
-  };
+	const addMessage = (msg: string) => {
+		setMessages((prev) => [msg, ...prev].slice(0, 50));
+	};
 
-  const unsubscribeFromList = () => {
-    addMessage('Unsubscribing from listTask...');
-    socket.emit('unsubscribe', { topic: 'listTask' });
-  };
+	const subscribeToList = () => {
+		addMessage('Subscribing to listTask...');
+		socket.emit('subscribe', { topic: 'listTask' });
+	};
 
-  return (
-    <div class="p-8 space-y-6">
-      <div class="flex items-center justify-between">
-        <h1 class="text-2xl font-bold">WebSocket Socket.io Test <Button onClick={()=> {
-          socket.emit('test:event', { timestamp: Date.now() })
-        }}>send msg</Button></h1>
-        <Badge class={status() === 'connected' ? 'bg-green-500' : 'bg-red-500'}>
-          {status()}
-        </Badge>
-      </div>
+	const unsubscribeFromList = () => {
+		addMessage('Unsubscribing from listTask...');
+		socket.emit('unsubscribe', { topic: 'listTask' });
+	};
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Controls</CardTitle>
-          </CardHeader>
-          <CardContent class="space-x-4">
-            <Button onClick={prepareModel} disabled={status() !== 'connected' || mlStatus()?.isReady} class='h-9'>
-              Prepare VoxCPM Model
-            </Button>
-            <Button onClick={subscribeToList} disabled={status() !== 'connected'}>
-              Subscribe to List
-            </Button>
-            <Button onClick={unsubscribeFromList} variant="outline" disabled={status() !== 'connected'}>
-              Unsubscribe
-            </Button>
-          </CardContent>
-        </Card>
+	return (
+		<div class="p-8 space-y-6">
+			<div class="flex items-center justify-between">
+				<h1 class="text-2xl font-bold">
+					WebSocket Socket.io Test{' '}
+					<Button
+						onClick={() => {
+							socket.emit('test:event', { timestamp: Date.now() });
+						}}
+					>
+						send msg
+					</Button>
+				</h1>
+				<Badge class={status() === 'connected' ? 'bg-green-500' : 'bg-red-500'}>
+					{status()}
+				</Badge>
+			</div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Model Status</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div class="space-y-4">
-              <div class="flex justify-between items-center">
-                <span>VoxCPM Ready:</span>
-                <Badge class={mlStatus()?.isReady ? 'bg-green-500' : 'bg-yellow-500'}>
-                  {mlStatus()?.isReady ? 'READY' : 'NOT READY'}
-                </Badge>
-              </div>
-              
-              {progress() && (
-                <div class="space-y-2">
-                  <div class="flex justify-between text-xs">
-                    <span>{progress()?.message}</span>
-                    <span>{progress()?.percent}%</span>
-                  </div>
-                  <div class="w-full bg-secondary h-2 rounded-full overflow-hidden">
-                    <div 
-                      class="bg-primary h-full transition-all duration-300" 
-                      style={{ width: `${progress()?.percent}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+				<Card>
+					<CardHeader>
+						<CardTitle>Controls</CardTitle>
+					</CardHeader>
+					<CardContent class="space-x-4">
+						<Button
+							onClick={prepareModel}
+							disabled={status() !== 'connected' || mlStatus()?.isReady}
+							class="h-9"
+						>
+							Prepare VoxCPM Model
+						</Button>
+						<Button
+							onClick={subscribeToList}
+							disabled={status() !== 'connected'}
+						>
+							Subscribe to List
+						</Button>
+						<Button
+							onClick={unsubscribeFromList}
+							variant="outline"
+							disabled={status() !== 'connected'}
+						>
+							Unsubscribe
+						</Button>
+					</CardContent>
+				</Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Logs</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div class="bg-black text-green-400 p-4 rounded h-64 overflow-y-auto font-mono text-sm">
-            <For each={messages()}>
-              {(msg) => <div>{`> ${msg}`}</div>}
-            </For>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
+				<Card>
+					<CardHeader>
+						<CardTitle>Model Status</CardTitle>
+					</CardHeader>
+					<CardContent>
+						<div class="space-y-4">
+							<div class="flex justify-between items-center">
+								<span>VoxCPM Ready:</span>
+								<Badge
+									class={mlStatus()?.isReady ? 'bg-green-500' : 'bg-yellow-500'}
+								>
+									{mlStatus()?.isReady ? 'READY' : 'NOT READY'}
+								</Badge>
+							</div>
+
+							{progress() && (
+								<div class="space-y-2">
+									<div class="flex justify-between text-xs">
+										<span>{progress()?.message}</span>
+										<span>{progress()?.percent}%</span>
+									</div>
+									<div class="w-full bg-secondary h-2 rounded-full overflow-hidden">
+										<div
+											class="bg-primary h-full transition-all duration-300"
+											style={{ width: `${progress()?.percent}%` }}
+										/>
+									</div>
+								</div>
+							)}
+						</div>
+					</CardContent>
+				</Card>
+			</div>
+
+			<Card>
+				<CardHeader>
+					<CardTitle>Logs</CardTitle>
+				</CardHeader>
+				<CardContent>
+					<div class="bg-black text-green-400 p-4 rounded h-64 overflow-y-auto font-mono text-sm">
+						<For each={messages()}>{(msg) => <div>{`> ${msg}`}</div>}</For>
+					</div>
+				</CardContent>
+			</Card>
+		</div>
+	);
 }
