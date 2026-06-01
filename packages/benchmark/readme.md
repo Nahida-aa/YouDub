@@ -34,6 +34,19 @@ packages/benchmark/
 | `nodejs-ONNX-webgpu.ts` | ONNX Runtime Node.js WebGPU |
 | `*‑test‑*` | 辅助/兼容性测试，非完整 benchmark |
 
+## 结果文件命名
+
+```
+<engine-abbr>-<backend>.json
+```
+
+| engine-abbr | 说明 |
+|---|---|
+| `py` | Python PyTorch |
+| `ts` | TypeScript ONNX Runtime |
+
+示例：`py-cpu.json`, `ts-webgpu.json`, `ts-cpu.json`
+
 ## 输出格式
 
 每个脚本在 `results/` 下输出 JSON：

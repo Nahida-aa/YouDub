@@ -62,7 +62,7 @@ def main():
         results.append(r)
         print(json.dumps(r, indent=2, ensure_ascii=False))
 
-    summary_path = RESULTS_DIR / "py-benchmark-summary.json"
+    summary_path = RESULTS_DIR / "py-cpu.json"
     summary_path.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\nSummary saved to {summary_path}")
 
