@@ -9,7 +9,8 @@ packages/benchmark/
 ├── readme.md
 ├── VC/           # Voice Cloning（语音克隆）
 │   ├── VoxCPM2/
-│   └── CosyVoice2/
+│   ├── CosyVoice2/
+│   └── CosyVoice3/
 ├── 语音分离/      # 未来扩展
 └── 语音识别/      # 未来扩展
 ```

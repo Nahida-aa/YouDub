@@ -18,12 +18,13 @@ export interface BenchmarkResult {
   output_samples: number;
   output_duration_s: number;
   auto_patches: number;
+  rtf: number;
 }
 
 export const TEXTS: Record<string, string> = {
-  short: '你好。',
-  medium: '今天天气真不错，我们一起去公园散步吧。',
-  long: '请播放一段关于人工智能发展的新闻。近年来，人工智能技术在各个领域都取得了显著的进展，从自然语言处理到计算机视觉，再到自动驾驶，AI正在改变我们的生活方式。',
+  short: 'Hello, how are you?',
+  medium: 'Today is a beautiful day. Let\'s go for a walk in the park and enjoy the sunshine together.',
+  long: 'Artificial intelligence is transforming the way we live and work. From natural language processing to computer vision and autonomous driving, AI technologies have made remarkable progress in recent years. These advances are creating new opportunities and challenges across every industry.',
 };
 
 export function round(v: number, d: number): number {
@@ -31,29 +32,37 @@ export function round(v: number, d: number): number {
   return Math.round(v * f) / f;
 }
 
-export async function runOne(ep: 'cpu' | 'webgpu', textKey: string): Promise<BenchmarkResult> {
-  const text = TEXTS[textKey];
+export async function runBenchmark(ep: 'cpu' | 'webgpu'): Promise<BenchmarkResult[]> {
+  const results: BenchmarkResult[] = [];
 
   const t0 = performance.now();
   const model = new VoxCPM(undefined, { executionProvider: ep });
   await model.load();
   const loadTime = (performance.now() - t0) / 1000;
 
-  const tGen0 = performance.now();
-  // No explicit maxPatches → auto-compute from text length
-  const audio = await model.generate({ text, referenceWavPath: REF_WAV, cfgValue: 2.0 });
-  const genTime = (performance.now() - tGen0) / 1000;
+  for (const [textKey, text] of Object.entries(TEXTS)) {
+    console.log(`\n[${ep}] ${textKey}...`);
+    const tGen0 = performance.now();
+    const audio = await model.generate({ text, referenceWavPath: REF_WAV, cfgValue: 2.0 });
+    const genTime = (performance.now() - tGen0) / 1000;
 
-  return {
-    engine: 'typescript',
-    device: ep,
-    text_key: textKey,
-    text_len: text.length,
-    load_time_s: round(loadTime, 3),
-    generate_time_s: round(genTime, 3),
-    total_time_s: round(loadTime + genTime, 3),
-    output_samples: audio.length,
-    output_duration_s: round(audio.length / 48000, 3),
-    auto_patches: Math.ceil(audio.length / 7680),
-  };
+    const outDur = audio.length / 48000;
+    const r: BenchmarkResult = {
+      engine: 'typescript',
+      device: ep,
+      text_key: textKey,
+      text_len: text.length,
+      load_time_s: round(loadTime, 3),
+      generate_time_s: round(genTime, 3),
+      total_time_s: round(loadTime + genTime, 3),
+      output_samples: audio.length,
+      output_duration_s: round(outDur, 3),
+      auto_patches: Math.ceil(audio.length / 7680),
+      rtf: round(genTime / outDur, 3),
+    };
+    console.log(JSON.stringify(r));
+    results.push(r);
+  }
+
+  return results;
 }

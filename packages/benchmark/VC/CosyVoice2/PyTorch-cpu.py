@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent.parent.parent.parent
-COSYVOICE_DIR = REPO_ROOT / 'third_party' / 'CosyVoice'
+COSYVOICE_DIR = REPO_ROOT / 'submodule' / 'CosyVoice'
 MATCHA_DIR = COSYVOICE_DIR / 'third_party' / 'Matcha-TTS'
 MODEL_DIR = REPO_ROOT / 'pretrained_models' / 'CosyVoice2-0.5B'
 sys.path.insert(0, str(COSYVOICE_DIR))
