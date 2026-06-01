@@ -190,3 +190,7 @@ examples/
 
 pnpm-lock.yaml
 node_modules
+
+# tmp
+*/tmp/*
+!packages/tmp/readme.md

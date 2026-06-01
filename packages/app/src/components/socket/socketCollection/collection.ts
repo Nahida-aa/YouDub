@@ -3,12 +3,15 @@ import type {
 	DeleteMutationFnParams,
 	InferSchemaOutput,
 	InsertMutationFnParams,
+	LoadSubsetOptions,
 	SyncConfig,
 	UpdateMutationFnParams,
 	UtilsRecord,
 } from '@tanstack/solid-db';
+import { fromTanDb } from 'agnostic-query/tanstack-db';
 import type { Socket } from 'socket.io-client';
 import type { StandardSchemaV1 } from '#/components/socket/socketCollection/schema.ts';
+import { emitAck } from '#/components/socket/socketCollection/utils.ts';
 
 interface SocketMessage<T> {
 	type: 'insert' | 'update' | 'delete' | 'sync' | 'transaction';
@@ -212,6 +215,7 @@ export function socketCollectionOptions<TSchema extends StandardSchemaV1>(
 	TSchema,
 	SocketUtils
 > & { schema: TSchema } {
+	const syncMode = config.syncMode || 'on-demand';
 	const socket = config.socket;
 	const id = config.id!;
 	const entry = getEntry(id);
@@ -258,18 +262,61 @@ export function socketCollectionOptions<TSchema extends StandardSchemaV1>(
 		entry.handlers.add(handler);
 		entry.refs += 1;
 		entry.connectionState = socket.connected ? 'connected' : 'disconnected';
-		entry.pendingInitialSync = true;
 		bindSocket(socket, id, entry);
 
-		if (socket.connected) {
-			entry.pendingInitialSync = false;
-			socket.emit('sync', { id });
+		if (syncMode === 'eager') {
+			entry.pendingInitialSync = true;
+			if (socket.connected) {
+				entry.pendingInitialSync = false;
+				socket.emit('sync', { id });
+			} else {
+				entry.connectionState = 'connecting';
+			}
 		} else {
-			entry.connectionState = 'connecting';
+			markReady();
 		}
 		console.log('Socket collection sync initialized for id:', id);
 
-		return () => {
+		async function loadSubset(opts: LoadSubsetOptions) {
+			if (!socket.connected) {
+				await new Promise<void>((resolve, reject) => {
+					const timeout = setTimeout(() => {
+						reject(new Error('Socket connection timeout'));
+					}, 15_000);
+					socket.once('connect', () => {
+						clearTimeout(timeout);
+						resolve();
+					});
+				});
+			}
+
+			const querySchema = fromTanDb(opts);
+			querySchema.table = id;
+
+			try {
+				const rows = await emitAck<TItem[]>(socket, 'loadSubset', querySchema);
+				console.log('[socketCollection] loadSubset received rows:', rows);
+				if (!Array.isArray(rows) || rows.length === 0) return;
+
+				begin();
+				for (const item of rows) {
+					write({ type: 'insert', value: item });
+				}
+				commit();
+			} catch (error) {
+				console.error('[socketCollection] loadSubset failed:', error);
+			}
+		}
+
+		function unloadSubset(opts: LoadSubsetOptions) {
+			if (!socket.connected) return;
+
+			const querySchema = fromTanDb(opts);
+			querySchema.table = id;
+			socket.emit('unloadSubset', querySchema);
+		}
+
+		function cleanup() {
 			entry.handlers.delete(handler);
 			entry.refs = Math.max(0, entry.refs - 1);
 
@@ -280,7 +327,11 @@ export function socketCollectionOptions<TSchema extends StandardSchemaV1>(
 				}
 				unbindSocket(socket, entry);
 			}
-		};
+		}
+
+		return syncMode === 'eager'
+			? { cleanup }
+			: { loadSubset, unloadSubset, cleanup };
 	};
 
 	async function sendTransaction(
@@ -358,6 +409,8 @@ export function socketCollectionOptions<TSchema extends StandardSchemaV1>(
 		id: config.id,
 		schema: config.schema,
 		getKey: config.getKey,
+		startSync: true,
+		syncMode: config.syncMode ?? 'on-demand',
 		sync: { sync },
 		onInsert,
 		onUpdate,

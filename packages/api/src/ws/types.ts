@@ -1,31 +1,9 @@
+import type { QuerySchema } from 'agnostic-query';
 import { z } from 'zod';
 import type { ModelStatus } from '#/ml/voxcpm/load.ts';
 import type { CookieInfo } from '#/settings/cookie.ts';
-
-export const WsErrorCode = {
-	INTERNAL_ERROR: 'INTERNAL_ERROR',
-	IO_ERROR: 'IO_ERROR',
-	VALIDATION_ERROR: 'VALIDATION_ERROR',
-} as const;
-
-export type WsErrorCode = (typeof WsErrorCode)[keyof typeof WsErrorCode];
-
-export type WsError<C extends WsErrorCode = WsErrorCode, D = undefined> = {
-	code: C;
-	msg: string;
-	details?: D;
-};
-
-export type RetErr<C extends WsErrorCode = WsErrorCode, D = undefined> = {
-	ok: false;
-	error: WsError<C, D>;
-};
-
-export type Ret<
-	T = undefined,
-	C extends WsErrorCode = WsErrorCode,
-	D = undefined,
-> = T | RetErr<C, D>;
+import { AppErr, AppError, appErrCode, newErr, type Ret } from '#/ws/errors.ts';
+import type { TableName } from '#/ws/registry.ts';
 
 export type TransactionMutation = {
 	type: 'insert' | 'update' | 'delete';
@@ -46,15 +24,6 @@ export type TransactionAck =
 			error: string;
 	  };
 
-export const newErr = <C extends WsErrorCode, D = undefined>(
-	code: C,
-	msg: string,
-	details?: D,
-): RetErr<C, D> => ({
-	ok: false,
-	error: details === undefined ? { code, msg } : { code, msg, details },
-});
-
 type AckFn<I = undefined, T = undefined> = (input: I) => Promise<T> | T;
 
 const getErrorMessage = (error: unknown) =>
@@ -71,9 +40,27 @@ export const errorHandler = <I = undefined, T = undefined>(fn: AckFn<I, T>) => {
 			result(data);
 		} catch (error) {
 			console.error('Error in WebSocket handler:', error);
-			result(newErr('INTERNAL_ERROR', getErrorMessage(error)) as Ret<T>);
+			if (error instanceof AppError) {
+				result(error.toJSON() as Ret<T>);
+			} else if (error instanceof z.ZodError) {
+				result(
+					newErr(
+						appErrCode.VALIDATION_ERROR,
+						error.message,
+						error.issues,
+					) as Ret<T>,
+				);
+			} else {
+				result(
+					newErr(appErrCode.INTERNAL_ERROR, getErrorMessage(error)) as Ret<T>,
+				);
+			}
 		}
 	};
+};
+
+export type LoadSubsetPayload = QuerySchema & {
+	table: TableName;
 };
 
 export interface ClientToServerEvents {
@@ -104,6 +91,11 @@ export interface ClientToServerEvents {
 	'ml:voxcpm:check': () => void;
 	subscribe: (data: { topic: string }) => void;
 	unsubscribe: (data: { topic: string }) => void;
+	loadSubset: (
+		payload: LoadSubsetPayload,
+		callback: (res: Ret<Array<Record<string, unknown>>>) => void,
+	) => void;
+	unloadSubset: (payload: LoadSubsetPayload) => void;
 }
 
 export interface ServerToClientEvents {
