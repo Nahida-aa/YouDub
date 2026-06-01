@@ -1,0 +1,5 @@
+[
+  {"engine":"typescript","device":"webgpu","text_key":"short","text_len":3,"load_time_s":18.553,"generate_time_s":17.82,"total_time_s":36.373,"output_samples":153600,"output_duration_s":3.2},
+  {"engine":"typescript","device":"webgpu","text_key":"medium","text_len":19,"load_time_s":24.66,"generate_time_s":43.254,"total_time_s":67.914,"output_samples":384000,"output_duration_s":8},
+  {"engine":"typescript","device":"webgpu","text_key":"long","text_len":77,"load_time_s":15.138,"generate_time_s":72.652,"total_time_s":87.789,"output_samples":614400,"output_duration_s":12.8}
+]
