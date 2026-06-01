@@ -194,5 +194,5 @@ node_modules
 # tmp
 */tmp/*
 !packages/tmp/readme.md
-
+.hf_cache/
 pretrained_models/

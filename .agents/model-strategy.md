@@ -5,6 +5,7 @@
 | Demucs | Python (PyTorch) | CPU | GPU hang (CrossTransformer + Wiener filter) |
 | VoxCPM (TTS) | Python (PyTorch) | CPU | GPU: model loads but any forward pass → segfault |
 | VoxCPM (TTS) | TypeScript (ONNX) | CPU / webgpu | ONNX 实现中，webgpu EP 可用于 RDNA 3 |
+| CosyVoice3 (TTS) | Python (ONNX) | CPU | 无 CUDA EP（缺 cuDNN 9），ONNX 全链路推理，社区 ayousanz/cosy-voice3-onnx |
 | Whisper (ASR) | Python (PyTorch) | GPU (cuda) | Works fine |
 | Translation | Python (OpenAI) | N/A | Remote API |
 

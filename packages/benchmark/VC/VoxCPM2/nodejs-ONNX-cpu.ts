@@ -1,15 +1,10 @@
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { runOne, RESULTS_DIR } from './bench-shared';
+import { runBenchmark, RESULTS_DIR } from './bench-shared';
 
 async function main() {
-  const results = [];
-  for (const key of ['short', 'medium', 'long'] as const) {
-    console.log(`\n[CPU] ${key}...`);
-    const r = await runOne('cpu', key);
-    console.log(JSON.stringify(r));
-    results.push(r);
-  }
+  mkdirSync(RESULTS_DIR, { recursive: true });
+  const results = await runBenchmark('cpu');
   const outPath = join(RESULTS_DIR, 'ts-cpu.json');
   writeFileSync(outPath, JSON.stringify(results, null, 2), 'utf-8');
   console.log(`\nSaved to ${outPath}`);
