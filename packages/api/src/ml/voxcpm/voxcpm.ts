@@ -40,8 +40,14 @@ export class VoxCPM {
   private vaeDec?: ort.InferenceSession;
   private tokenizer?: any;
   private loaded = false;
+  private ep: ('cpu' | 'webgpu')[];
 
-  constructor(private modelDir: string = VOXCPM_MODEL_PATH) {}
+  constructor(
+    private modelDir: string = VOXCPM_MODEL_PATH,
+    options?: { executionProvider?: 'cpu' | 'webgpu' },
+  ) {
+    this.ep = options?.executionProvider ? [options.executionProvider] : ['cpu'];
+  }
 
   async load() {
     const status = await checkVoxCPMStatus();
@@ -49,11 +55,12 @@ export class VoxCPM {
       throw new Error(`VoxCPM model not ready in ${this.modelDir}. Missing ONNX files.`);
     }
 
-    console.log(`[VoxCPM] Loading ONNX sessions...`);
-    this.prefill = await ort.InferenceSession.create(`${this.modelDir}/voxcpm2_prefill.onnx`);
-    this.decode = await ort.InferenceSession.create(`${this.modelDir}/voxcpm2_decode_step.onnx`);
-    this.vaeEnc = await ort.InferenceSession.create(`${this.modelDir}/audio_vae_encoder.onnx`);
-    this.vaeDec = await ort.InferenceSession.create(`${this.modelDir}/audio_vae_decoder.onnx`);
+    console.log(`[VoxCPM] Loading ONNX sessions (ep=${this.ep})...`);
+    const opts: ort.InferenceSession.SessionOptions = { executionProviders: this.ep };
+    this.prefill = await ort.InferenceSession.create(`${this.modelDir}/voxcpm2_prefill.onnx`, opts);
+    this.decode = await ort.InferenceSession.create(`${this.modelDir}/voxcpm2_decode_step.onnx`, opts);
+    this.vaeEnc = await ort.InferenceSession.create(`${this.modelDir}/audio_vae_encoder.onnx`, opts);
+    this.vaeDec = await ort.InferenceSession.create(`${this.modelDir}/audio_vae_decoder.onnx`, opts);
 
     console.log(`[VoxCPM] Loading tokenizer...`);
     this.tokenizer = await AutoTokenizer.from_pretrained(this.modelDir);
@@ -66,7 +73,6 @@ export class VoxCPM {
     if (!this.loaded) throw new Error('Call load() first.');
 
     const cfg = options.cfgValue ?? CFG.defaultCfgValue;
-    const maxPatches = options.maxPatches ?? CFG.maxLen;
     const minPatches = options.minPatches ?? CFG.minLen;
 
     // 1. Encode reference WAV
@@ -75,6 +81,10 @@ export class VoxCPM {
     // 2. Tokenize text
     const textIds = await this._tokenize(options.text);
     const textLen = textIds.length;
+
+    // Auto-compute maxPatches from text length (stop_flag is unreliable on ONNX)
+    const autoMaxPatches = Math.max(20, Math.ceil(textLen * 6));
+    const maxPatches = options.maxPatches ?? autoMaxPatches;
 
     // 3. Build reference prefix
     const refPatches = Math.floor(refFeat.length / CFG.featDim);
@@ -172,15 +182,17 @@ export class VoxCPM {
       resVals = decOut['new_residual_next_values'] as ort.Tensor;
       prefixCond = new ort.Tensor('float32', new Float32Array(pData), [1, CFG.patchSize, CFG.featDim]);
 
-      const stopFlag = decOut['stop_flag'] as ort.Tensor;
-      const stopData = stopFlag.data as Uint8Array;
-      if (step >= minPatches && stopData[0] !== 0) {
-        console.log(`[VoxCPM] Stopped at step ${step}`);
-        break;
+      if (step >= minPatches) {
+        const stopFlag = decOut['stop_flag'] as ort.Tensor;
+        const stopData = stopFlag.data as Uint8Array;
+        if (stopData[0] !== 0) {
+          console.log(`[VoxCPM] Stopped at step ${step}`);
+          break;
+        }
       }
 
-      if (step % 20 === 19) {
-        console.log(`[VoxCPM] Step ${step + 1}`);
+      if (step % 20 === 19 || step === maxPatches - 1) {
+        console.log(`[VoxCPM] Step ${step + 1}/${maxPatches}`);
       }
     }
 
