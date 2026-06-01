@@ -1,6 +1,6 @@
 import { createCollection } from '@tanstack/solid-db';
 import { z } from 'zod';
-import { socketCollectionOptions } from '#/components/socket/sync.ts';
+import { socketCollectionOptions } from '#/components/socket/socketCollection/collection.ts';
 import { socket } from '#/components/socket/ws.ts';
 
 const todoSchema = z.object({

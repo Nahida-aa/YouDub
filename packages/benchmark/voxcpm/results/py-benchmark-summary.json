@@ -1,0 +1,38 @@
+[
+  {
+    "engine": "python",
+    "device": "cpu",
+    "text_key": "short",
+    "text_len": 3,
+    "timesteps": 10,
+    "load_time_s": 16.995,
+    "generate_time_s": 5.794,
+    "total_time_s": 22.789,
+    "output_samples": 53760,
+    "output_duration_s": 1.12
+  },
+  {
+    "engine": "python",
+    "device": "cpu",
+    "text_key": "medium",
+    "text_len": 19,
+    "timesteps": 10,
+    "load_time_s": 20.386,
+    "generate_time_s": 49.342,
+    "total_time_s": 69.728,
+    "output_samples": 253440,
+    "output_duration_s": 5.28
+  },
+  {
+    "engine": "python",
+    "device": "cpu",
+    "text_key": "long",
+    "text_len": 77,
+    "timesteps": 10,
+    "load_time_s": 30.666,
+    "generate_time_s": 147.695,
+    "total_time_s": 178.361,
+    "output_samples": 721920,
+    "output_duration_s": 15.04
+  }
+]

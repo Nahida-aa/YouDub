@@ -1,9 +1,10 @@
-import { websocket } from 'hono/bun';
-import { engine } from '#/socket.io/api.ts';
-// import { io } from '#/ws/route.ts';
-import app from './app';
+// import { websocket } from 'hono/bun';
+import { engine } from '#/socket.io/route.ts';
 
+// import { io } from '#/ws/route.ts';
 const io = engine.handler();
+
+import app from './app';
 
 export default Bun.serve({
 	port: 9007,

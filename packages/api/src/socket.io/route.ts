@@ -1,15 +1,21 @@
-import { Server as Engine } from '@socket.io/bun-engine';
-import { Server } from 'socket.io';
-import { sqlite } from '#/db/index.ts';
-import { engine, io } from '#/socket.io/io.ts';
+import { toDb0 } from 'agnostic-query/db0/sqlite';
+// import { toDrizzle } from 'agnostic-query/drizzle/sqlite';
+import { db, sql } from '#/db/index';
+import { save_youtube_cookie } from '#/feat/settings/cookie.ts';
 import {
 	applyTransaction,
 	assertCollection,
 	listCollectionRows,
 } from '#/ws/collect.ts';
-import type { TransactionPayload } from '#/ws/types.ts';
+import { getTableInfo, tableRegistry } from '#/ws/registry.ts';
+import {
+	type ClientToServerEvents,
+	errorHandler,
+	type ServerToClientEvents,
+} from '#/ws/types.ts';
 import { downloadVoxCPM } from '../ml/voxcpm/download';
 import { checkVoxCPMStatus } from '../ml/voxcpm/load';
+import { engine, io } from './io.ts';
 
 // 全局任务状态追踪
 const voxcpmPrepareTask: {
@@ -23,32 +29,15 @@ const voxcpmPrepareTask: {
 io.on('connection', async (socket) => {
 	console.log('New client connected:', socket.id);
 
+	socket.on(
+		'save_youtube_cookie',
+		errorHandler(async (input) => {
+			return await save_youtube_cookie(input);
+		}),
+	);
+
 	// 发送欢迎消息
 	socket.emit('echo', { hello: 'Welcome to YouDub WebSocket API' });
-
-	socket.on('sync', ({ id }) => {
-		try {
-			assertCollection(id);
-			socket.emit('sync', listCollectionRows(id));
-		} catch (error) {
-			console.error('[WS] Sync failed:', error);
-			socket.emit('sync', []);
-		}
-	});
-
-	socket.on('transaction', (payload, callback) => {
-		try {
-			applyTransaction(payload);
-			io.emit('transaction', payload);
-			callback({ ok: true });
-		} catch (error) {
-			const message =
-				error instanceof Error ? error.message : 'Unknown transaction error';
-			console.error('[WS] Transaction failed:', error);
-			callback({ ok: false, error: message });
-		}
-	});
-
 	socket.on('test:event', (data) => {
 		console.log('Received test:event with data:', data);
 		socket.emit('test:event', { message: 'Test event received!' });
@@ -74,6 +63,7 @@ io.on('connection', async (socket) => {
 
 	// 处理模型准备请求 (请求-响应模式)
 	socket.on('ml:voxcpm:prepare', async (data, callback) => {
+		console.log('Received ml:voxcpm:prepare request from client:', socket.id);
 		if (voxcpmPrepareTask.status === 'processing') {
 			return callback({
 				status: 'error',
@@ -119,10 +109,12 @@ io.on('connection', async (socket) => {
 					const finalStatus = await checkVoxCPMStatus();
 					io.emit('ml:voxcpm:status', finalStatus);
 				} catch (error: unknown) {
+					const message =
+						error instanceof Error ? error.message : 'Unknown download error';
 					console.error('[WS] Download failed:', error);
 					voxcpmPrepareTask.status = 'error';
 					voxcpmPrepareTask.progress = {
-						message: `Download failed: ${error instanceof Error ? error.message : 'Unknown download error'}`,
+						message: `Download failed: ${message}`,
 						percent: 0,
 					};
 					io.emit('ml:voxcpm:progress', voxcpmPrepareTask.progress);
@@ -138,9 +130,44 @@ io.on('connection', async (socket) => {
 		}
 	});
 
-	socket.on('disconnect', () => {
-		console.log('Client disconnected:', socket.id);
+	socket.on('sync', ({ id }) => {
+		try {
+			assertCollection(id);
+			socket.emit('sync', listCollectionRows(id));
+		} catch (error) {
+			console.error('[WS] Sync failed:', error);
+			socket.emit('sync', []);
+		}
+	});
+	socket.on(
+		'loadSubset',
+		errorHandler(async (payload) => {
+			const entry = getTableInfo(payload.table);
+			const parsed = entry.validate.parse(payload);
+			console.log('[loadSubset] Parsed payload:', parsed);
+			return await toDb0(sql, parsed);
+		}),
+	);
+
+	socket.on('transaction', (payload, callback) => {
+		try {
+			applyTransaction(payload);
+			io.emit('transaction', payload);
+			callback({ ok: true });
+		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : 'Unknown transaction error';
+			console.error('[WS] Transaction failed:', error);
+			callback({ ok: false, error: message });
+		}
+	});
+	socket.on('unloadSubset', (payload) => {
+		console.log('[unloadSubset]', payload.table, payload);
+	});
+
+	socket.on('disconnect', (reason) => {
+		console.log('Client disconnected:', socket.id, 'Reason:', reason);
 	});
 });
 
-export { engine };
+export { engine, io };

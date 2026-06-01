@@ -1,12 +1,11 @@
 import { Hono } from 'hono';
+import deviceRoute from '#/ml/device-route';
 
 const app = new Hono();
-
-import wsApi from './ws/api';
 
 app.get('/', (c) => {
 	return c.text('Hello Hono!');
 });
-// .route('', wsApi)
+app.route('/api', deviceRoute);
 
 export default app;

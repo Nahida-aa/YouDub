@@ -14,6 +14,7 @@ export const tasksCollect = createCollection(
 		schema: tasksSchema,
 		getKey: (todo) => todo.id,
 		// Note: No onInsert/onUpdate/onDelete - handled by Socket automatically
+		syncMode: 'on-demand',
 	}),
 );
 

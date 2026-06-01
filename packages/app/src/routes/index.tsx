@@ -18,13 +18,16 @@ import {
 import { useLiveQuery } from '@tanstack/solid-db';
 import { createFileRoute, Link, useNavigate } from '@tanstack/solid-router';
 import { ChevronRight, Play, Upload } from 'lucide-solid';
-import { createSignal, For, onMount, Show } from 'solid-js';
+import { createEffect, createSignal, For, onMount, Show } from 'solid-js';
 import { tasksCollect, tasksQ } from '#/feat/tasks/sync.ts';
 import type { LocalDirection, TaskSummary } from '../lib/api';
 import { createTask, listTasks, uploadLocalTask } from '../lib/api';
 
 export const Route = createFileRoute('/')({
 	component: Home,
+	onError: (err) => {
+		console.error('Error loading home route:', err);
+	},
 });
 
 function statusBadgeClass(status?: string): string {
@@ -85,7 +88,13 @@ function shortUrl(url: string) {
 function Home() {
 	const navigate = useNavigate();
 	const tasks = useLiveQuery((q) => tasksQ(q));
-
+	const isLoading = () => tasks.isLoading;
+	console.log('Home component initialized, tasks signal created', tasks());
+	createEffect(() => {
+		console.log('Tasks updated:', tasks(), {
+			isLoading: isLoading(),
+		});
+	});
 	const [error, setError] = createSignal('');
 	const [submitting, setSubmitting] = createSignal(false);
 	const [youtubeUrl, setYoutubeUrl] = createSignal('');
@@ -133,6 +142,7 @@ function Home() {
 		'zh-en': '中 → 英',
 	};
 	console.log('Home component rendered');
+
 	return (
 		<div class="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
 			<Card>
@@ -228,46 +238,39 @@ function Home() {
 					<CardTitle>任务历史 ({tasks().length})</CardTitle>
 				</CardHeader>
 				<CardContent class="px-0">
-					<Show
-						when={tasks().length > 0}
-						fallback={
-							<div class="px-6 py-12 text-center text-sm text-muted-foreground">
-								暂无任务
-							</div>
-						}
-					>
-						<ul class="flex flex-col">
-							<For each={tasks()}>
-								{(item) => (
-									<li class="border-b border-border/60 last:border-b-0">
-										<Link
-											to="/tasks/$id"
-											params={{ id: item.id }}
-											class="flex w-full items-center gap-3 px-6 py-3 text-sm transition-colors hover:bg-muted/60"
-										>
-											<div class="min-w-0 flex-1">
-												<p class="truncate text-left font-medium text-zinc-900 dark:text-zinc-100">
-													{item.title || shortUrl(item.url)}
-												</p>
-												<div class="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-													<Badge class={statusBadgeClass(item.status)}>
-														{statusLabel(item.status)}
-													</Badge>
-													<span>{formatTime(item.created_at)}</span>
-													<Show
-														when={isActive(item.status) && item.current_stage}
-													>
-														<span>· {stageLabel(item.current_stage!)}</span>
-													</Show>
-												</div>
-											</div>
-											<ChevronRight class="size-4 shrink-0 text-muted-foreground" />
-										</Link>
-									</li>
-								)}
-							</For>
-						</ul>
-					</Show>
+					{isLoading() && <div>tasks Loading...</div>}
+					{tasks().length === 0 && (
+						<div class="px-6 py-12 text-center text-sm text-muted-foreground">
+							暂无任务
+						</div>
+					)}
+					<ul class="flex flex-col">
+						{tasks().map((item) => (
+							<li class="border-b border-border/60 last:border-b-0">
+								<Link
+									to="/tasks/$id"
+									params={{ id: item.id }}
+									class="flex w-full items-center gap-3 px-6 py-3 text-sm transition-colors hover:bg-muted/60"
+								>
+									<div class="min-w-0 flex-1">
+										<p class="truncate text-left font-medium text-zinc-900 dark:text-zinc-100">
+											{item.title || shortUrl(item.url)}
+										</p>
+										<div class="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+											<Badge class={statusBadgeClass(item.status)}>
+												{statusLabel(item.status)}
+											</Badge>
+											<span>{formatTime(item.created_at)}</span>
+											<Show when={isActive(item.status) && item.current_stage}>
+												<span>· {stageLabel(item.current_stage!)}</span>
+											</Show>
+										</div>
+									</div>
+									<ChevronRight class="size-4 shrink-0 text-muted-foreground" />
+								</Link>
+							</li>
+						))}
+					</ul>
 				</CardContent>
 			</Card>
 		</div>
