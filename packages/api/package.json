@@ -13,7 +13,7 @@
     "@repo/shared": "workspace:*",
     "@socket.io/bun-engine": "^0.1.1",
     "@types/cors": "^2.8.19",
-    "agnostic-query": "1.10.2",
+    "agnostic-query": "1.10.5",
     "cors": "^2.8.6",
     "db0": "^0.3.4",
     "dotenv": "^17.4.2",

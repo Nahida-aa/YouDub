@@ -7,8 +7,10 @@ AMD Radeon 780M (RDNA 3), ROCm 7.2.3 → `.agents/hardware.md`
 | 模型 | 设备 | 原因 |
 |------|------|------|
 | Demucs | CPU | GPU hang |
-| VoxCPM | CPU | GPU hang |
-| CosyVoice3 | CPU | 无 CUDA EP, 计划编译 ORT with ROCm |
+| VoxCPM (PyTorch) | CPU | GPU segfault |
+| VoxCPM (vLLM-Omni) | GPU (ROCm) | 实验性，HIP ABI 不兼容 + GPU Hang |
+| VoxCPM (ORT+MIGraphX) | GPU (ROCm) | ✅ 可用，VAE Encoder/Decoder CPU fallback + MIGRAPHX_DISABLE_MIOPEN_FUSION=1 |
+| CosyVoice3 | CPU | 无 CUDA EP, 编译 ORT + MIGraphX 中（但 gfx1103 MIOpen conv solver hang 可能会堵） |
 | Whisper | GPU (cuda) | 正常 |
 | 翻译 | GPU (cuda) | 正常 |
 
@@ -20,6 +22,11 @@ AMD Radeon 780M (RDNA 3), ROCm 7.2.3 → `.agents/hardware.md`
 - `packages/benchmark/` — 性能测试
 - `data/modelscope/CosyVoice3-0.5B/onnx/scripts/` — CosyVoice3 ONNX 推理脚本（零 PyTorch 依赖）
 - `submodule/CosyVoice/` — FunAudioLLM CosyVoice 官方源码
+- `submodule/VoxCPM/` — OpenBMB VoxCPM 官方源码
+
+## Temp directory
+- `packages/tmp/` — 项目级临时文件/构建产物（已 gitignored via `*/tmp/*` in `.gitignore`）
+- 大型第三方编译（如 ORT 源码）放此目录而非系统 `/tmp/`
 
 ## Navigation
 - `.agents/hardware.md` — GPU 兼容性 & 环境变量

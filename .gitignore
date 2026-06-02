@@ -196,3 +196,5 @@ node_modules
 !packages/tmp/readme.md
 .hf_cache/
 pretrained_models/
+
+.agents/hardware.md

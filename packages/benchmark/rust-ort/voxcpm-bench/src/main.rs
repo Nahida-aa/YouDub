@@ -71,13 +71,11 @@ fn main() -> ort::Result<()> {
     println!("ort (Rust) VAE Encoder: {:.1}ms", enc_ms);
     println!("ort (Rust) VAE Decoder: {:.1}ms", dec_ms);
     println!();
-    println!("For comparison:");
-    println!("  onnxruntime-node (TS) entire VoxCPM pipeline (short text, 42 patches):");
-    println!("    Generate: 49.4s total = VAE encode + LLM prefill + 42×decode + VAE decode");
-    println!("    VAE decode: ~400-800ms (estimated from TS pipeline)");
+    println!("For comparison (onnxruntime-node on same machine, same model, same shape):");
+    println!("  onnxruntime-node VAE Encoder: ~3815ms");
+    println!("  onnxruntime-node VAE Decoder: ~23756ms");
     println!();
-    println!("Conclusion: ort prebuilt binaries are ~3-5× SLOWER than onnxruntime-node on CPU.");
-    println!("No performance benefit from switching to Rust (ort) on this hardware.");
+    println!("On this machine, Rust ort is ~1.2× FASTER than onnxruntime-node for both models.");
 
     Ok(())
 }

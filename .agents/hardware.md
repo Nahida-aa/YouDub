@@ -13,6 +13,20 @@
 - Full Demucs forward on GPU → GPU Hang + driver crash (black screen); reproducible regardless of conv backend.
 - Python VoxCPM: model loads on GPU (param placement OK), but **any forward pass** (even VAE encoder) → segfault. Must use CPU for runtime.
 
+## ORT + MIGraphX (self-built)
+
+Built ORT 1.25.0 from source with `--use_migraphx`, `--migraphx_home /opt/rocm`.
+Prebuilt wheels are ABI-incompatible with ROCm 7.2.3.
+
+| Model | Status | First (compile) | Cached | Notes |
+|-------|--------|-----------------|--------|-------|
+| VAE Decoder | ✅ | 67s | **0.123s** | GEMM-only, no conv |
+| VAE Encoder | ❌ | — | — | MIOpen conv solver → GPU Hang |
+| Decode Step | ✅ | 1.7s | **0.504s** | KV-cache, attention only |
+| Prefill (2B) | ⏳ | >20min | ? | Compiling with MIGRAPHX_CACHE_DIR |
+
+**Split strategy**: VAE Encoder (conv-based) → CPU EP, others (GEMM/attention) → MIGraphX EP.
+
 ## ONNX Runtime (Node.js)
 
 - Version: 1.26.0
