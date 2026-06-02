@@ -1,4 +1,4 @@
-import { toDb0 } from 'agnostic-query/db0/sqlite';
+import { toDb0 } from 'agnostic-query/db0/sqlite.js';
 // import { toDrizzle } from 'agnostic-query/drizzle/sqlite';
 import { db, sql } from '#/db/index';
 import { save_youtube_cookie } from '#/feat/settings/cookie.ts';

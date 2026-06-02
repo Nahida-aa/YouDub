@@ -4,6 +4,9 @@
   "workspaces": {
     "": {
       "name": "youdub-webui-fullstack",
+      "dependencies": {
+        "agnostic-query": "^1.10.5",
+      },
       "devDependencies": {
         "@biomejs/biome": "2.4.16",
       },
@@ -41,7 +44,7 @@
         "@repo/shared": "workspace:*",
         "@socket.io/bun-engine": "^0.1.1",
         "@types/cors": "^2.8.19",
-        "agnostic-query": "^1.10.2",
+        "agnostic-query": "1.10.5",
         "cors": "^2.8.6",
         "db0": "^0.3.4",
         "dotenv": "^17.4.2",
@@ -861,7 +864,7 @@
 
     "agent-base": ["agent-base@7.1.4", "", {}, "sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ=="],
 
-    "agnostic-query": ["agnostic-query@1.10.2", "", { "peerDependencies": { "@tanstack/db": "^0.6.5", "drizzle-orm": "^0.45.2", "kysely": "^0.29.0", "valibot": "^1.4.0", "zod": "^4.4.3" }, "optionalPeers": ["@tanstack/db", "drizzle-orm", "kysely", "valibot", "zod"] }, "sha512-kJ13EKHwAlQJzPPKflmnEmympeXgqXen1v0niMRzcqMFkHgkfYW8kVnAcCb8PEXW/WHOnSlf0ZNxM1WIRWWaHw=="],
+    "agnostic-query": ["agnostic-query@1.10.5", "", { "peerDependencies": { "@tanstack/db": "*", "drizzle-orm": "*", "kysely": "*", "valibot": "^1.4.0", "zod": "^4.0.0" }, "optionalPeers": ["@tanstack/db", "drizzle-orm", "kysely", "valibot", "zod"] }, "sha512-OPrMuIdfH/9sPGKzUNsNjCI+dCZJgLjhzqm09tsnGuxW17lhfyNiZUIz21wiNlGZnR5mfYG9KqwJGrfoIM3RmA=="],
 
     "ajv": ["ajv@6.10.0", "", { "dependencies": { "fast-deep-equal": "^2.0.1", "fast-json-stable-stringify": "^2.0.0", "json-schema-traverse": "^0.4.1", "uri-js": "^4.2.2" } }, "sha512-nffhOpkymDECQyR0mnsUtoCE8RlX38G0rYP+wgLWFyZuUyuuojSSvi/+euOiQBIn63whYwYVIIH1TvE3tu4OEg=="],
 
@@ -2250,6 +2253,8 @@
     "ajv-formats/ajv": ["ajv@8.20.0", "", { "dependencies": { "fast-deep-equal": "^3.1.3", "fast-uri": "^3.0.1", "json-schema-traverse": "^1.0.0", "require-from-string": "^2.0.2" } }, "sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA=="],
 
     "amqplib/readable-stream": ["readable-stream@1.1.14", "", { "dependencies": { "core-util-is": "~1.0.0", "inherits": "~2.0.1", "isarray": "0.0.1", "string_decoder": "~0.10.x" } }, "sha512-+MeVjFf4L44XUkhM1eYbD8fyEsxcV81pqMSR5gblfcLCHfZvbrqy4/qYHE+/R5HoBUT11WV5O08Cr1n3YXkWVQ=="],
+
+    "app/agnostic-query": ["agnostic-query@1.10.2", "", { "peerDependencies": { "@tanstack/db": "^0.6.5", "drizzle-orm": "^0.45.2", "kysely": "^0.29.0", "valibot": "^1.4.0", "zod": "^4.4.3" }, "optionalPeers": ["@tanstack/db", "drizzle-orm", "kysely", "valibot", "zod"] }, "sha512-kJ13EKHwAlQJzPPKflmnEmympeXgqXen1v0niMRzcqMFkHgkfYW8kVnAcCb8PEXW/WHOnSlf0ZNxM1WIRWWaHw=="],
 
     "babel-plugin-jsx-dom-expressions/@babel/helper-module-imports": ["@babel/helper-module-imports@7.18.6", "", { "dependencies": { "@babel/types": "^7.18.6" } }, "sha512-0NFvs3VkuSYbFi1x2Vd6tKrywq+z/cLeYC/RJNFrIX/30Bf5aiGYbtvGXolEktzJH8o5E5KJ3tT+nkxuuZFVlA=="],
 

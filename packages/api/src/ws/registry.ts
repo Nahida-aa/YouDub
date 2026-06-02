@@ -1,4 +1,4 @@
-import { createQuerySchema } from 'agnostic-query/zod';
+import { createQuerySchema } from 'agnostic-query/zod.js';
 import type { Tasks } from '#/feat/tasks/schema.ts';
 import { tasks } from '#/feat/tasks/table.ts';
 import { AppError } from '#/ws/errors.ts';

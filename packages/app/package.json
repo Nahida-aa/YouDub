@@ -7,8 +7,8 @@
   },
   "type": "module",
   "scripts": {
-    "start": "vite",
     "dev": "vite",
+    "start": "vite",
     "dev:desktop": "bun run tauri dev",
     "dev:android": "bun run tauri android dev",
     "typecheck": "tsgo --noEmit",
