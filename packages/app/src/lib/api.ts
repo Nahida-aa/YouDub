@@ -1,4 +1,3 @@
-import { Ret } from '@repo/api/src/ws/types';
 import { socket } from '#/components/socket/ws.ts';
 
 const API_BASE =
