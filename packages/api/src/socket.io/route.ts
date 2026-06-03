@@ -1,12 +1,10 @@
+import { aq } from 'agnostic-query';
 import { toDb0 } from 'agnostic-query/db0/sqlite.js';
 // import { toDrizzle } from 'agnostic-query/drizzle/sqlite';
 import { db, sql } from '#/db/index';
 import { save_youtube_cookie } from '#/feat/settings/cookie.ts';
-import {
-	applyTransaction,
-	assertCollection,
-	listCollectionRows,
-} from '#/ws/collect.ts';
+import { createTask } from '#/feat/tasks/fn.ts';
+import { applyTransaction, assertCollection } from '#/ws/collect.ts';
 import { getTableInfo, tableRegistry } from '#/ws/registry.ts';
 import {
 	type ClientToServerEvents,
@@ -132,10 +130,25 @@ io.on('connection', async (socket) => {
 		}
 	});
 
-	socket.on('sync', ({ id }) => {
+	socket.on(
+		'createTask',
+		errorHandler(async (url) => {
+			return await createTask(url);
+		}),
+	);
+
+	socket.on('sync', async ({ id }) => {
 		try {
 			assertCollection(id);
-			socket.emit('sync', listCollectionRows(id));
+			socket.emit(
+				'sync',
+				await toDb0(
+					sql,
+					aq({
+						table: id,
+					}).toJSON(),
+				),
+			);
 		} catch (error) {
 			console.error('[WS] Sync failed:', error);
 			socket.emit('sync', []);

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import deviceRoute from '#/ml/device-route';
+import deviceRoute from '#/feat/device/device-route.ts';
 
 const app = new Hono();
 

@@ -1,19 +1,71 @@
-import { createFileRoute, useParams, useNavigate, Link } from '@tanstack/solid-router';
-import { createSignal, createMemo, For, Show } from 'solid-js';
-import { createQuery } from '@tanstack/solid-query';
-import { ArrowLeft, Download, Play, RotateCcw, Trash2, AlertTriangle, CheckCircle2, Loader2, Clock, XCircle, Languages } from 'lucide-solid';
-import { Button } from '@repo/ui-solid/base/button';
 import { Badge } from '@repo/ui-solid/base/badge';
-import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from '@repo/ui-solid/base/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@repo/ui-solid/base/dialog';
+import { Button } from '@repo/ui-solid/base/button';
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardFooter,
+	CardHeader,
+	CardTitle,
+} from '@repo/ui-solid/base/card';
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from '@repo/ui-solid/base/dialog';
+import { createQuery } from '@tanstack/solid-query';
+import {
+	createFileRoute,
+	Link,
+	useNavigate,
+	useParams,
+} from '@tanstack/solid-router';
+import {
+	AlertTriangle,
+	ArrowLeft,
+	CheckCircle2,
+	Clock,
+	Download,
+	Languages,
+	Loader2,
+	Play,
+	RotateCcw,
+	Trash2,
+	XCircle,
+} from 'lucide-solid';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import type { TaskStage } from '../lib/api';
-import { getTask, getTaskLog, deleteTask, resumeTask, rerunStage, finalVideoUrl, finalVideoDownloadUrl, getTaskDescription, translateTaskDescription } from '../lib/api';
+import {
+	deleteTask,
+	finalVideoDownloadUrl,
+	finalVideoUrl,
+	getTask,
+	getTaskDescription,
+	getTaskLog,
+	rerunStage,
+	resumeTask,
+	translateTaskDescription,
+} from '../lib/api';
 
 export const Route = createFileRoute('/tasks/$id')({
 	component: TaskDetail,
 });
 
-const STAGE_ORDER = ['download', 'separate', 'asr', 'asr_fix', 'translate', 'split_audio', 'tts', 'merge_audio', 'merge_video'];
+const STAGE_ORDER = [
+	'download',
+	'separate',
+	'asr',
+	'asr_fix',
+	'translate',
+	'split_audio',
+	'tts',
+	'merge_audio',
+	'merge_video',
+];
 
 function stageLabel(name: string): string {
 	const map: Record<string, string> = {
@@ -32,30 +84,44 @@ function stageLabel(name: string): string {
 
 function stageIcon(status: string) {
 	switch (status) {
-		case 'succeeded': return CheckCircle2;
-		case 'failed': return XCircle;
-		case 'running': return Loader2;
-		case 'queued': return Clock;
-		default: return Clock;
+		case 'succeeded':
+			return CheckCircle2;
+		case 'failed':
+			return XCircle;
+		case 'running':
+			return Loader2;
+		case 'queued':
+			return Clock;
+		default:
+			return Clock;
 	}
 }
 
 function stageIconClass(status: string): string {
 	switch (status) {
-		case 'succeeded': return 'text-green-500';
-		case 'failed': return 'text-red-500';
-		case 'running': return 'text-blue-500 animate-spin';
-		default: return 'text-muted-foreground';
+		case 'succeeded':
+			return 'text-green-500';
+		case 'failed':
+			return 'text-red-500';
+		case 'running':
+			return 'text-blue-500 animate-spin';
+		default:
+			return 'text-muted-foreground';
 	}
 }
 
 function stageBadgeClass(status: string): string {
 	switch (status) {
-		case 'succeeded': return 'bg-green-500/10 text-green-600 border-green-200';
-		case 'failed': return 'bg-red-500/10 text-red-600 border-red-200';
-		case 'running': return 'bg-blue-500/10 text-blue-600 border-blue-200';
-		case 'queued': return 'bg-amber-500/10 text-amber-600 border-amber-200';
-		default: return 'bg-muted text-muted-foreground';
+		case 'succeeded':
+			return 'bg-green-500/10 text-green-600 border-green-200';
+		case 'failed':
+			return 'bg-red-500/10 text-red-600 border-red-200';
+		case 'running':
+			return 'bg-blue-500/10 text-blue-600 border-blue-200';
+		case 'queued':
+			return 'bg-amber-500/10 text-amber-600 border-amber-200';
+		default:
+			return 'bg-muted text-muted-foreground';
 	}
 }
 
@@ -93,7 +159,7 @@ function progressPercent(stages: TaskStage[]): number {
 	return Math.round((completed / stages.length) * 100);
 }
 
-import { m } from "@repo/shared/i18n/paraglide/messages";
+import { m } from '@repo/shared/i18n/paraglide/messages';
 
 function TaskDetail() {
 	const params = useParams({ from: '/tasks/$id' });
@@ -111,7 +177,7 @@ function TaskDetail() {
 		queryKey: ['taskLog', params().id],
 		queryFn: async () => {
 			try {
-				return await getTaskLog(params().id) || '';
+				return (await getTaskLog(params().id)) || '';
 			} catch {
 				console.log('Failed to fetch log for task', params().id);
 				return ''; // Ignore log fetch errors
@@ -201,12 +267,17 @@ function TaskDetail() {
 		<div class="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
 			{/* Header */}
 			<div class="flex items-center gap-3">
-				<Link to="/" class="text-muted-foreground hover:text-foreground transition-colors">
+				<Link
+					to="/"
+					class="text-muted-foreground hover:text-foreground transition-colors"
+				>
 					<ArrowLeft class="size-5" />
 				</Link>
 				<div class="min-w-0 flex-1">
 					<h1 class="truncate text-lg font-semibold">
-						{task()?.title || task()?.url?.replace(/^https?:\/\/(www\.)?/, '') || '加载中...'}
+						{task()?.title ||
+							task()?.url?.replace(/^https?:\/\/(www\.)?/, '') ||
+							'加载中...'}
 					</h1>
 				</div>
 				<Show when={task()}>
@@ -224,7 +295,7 @@ function TaskDetail() {
 
 			<Show when={task()}>
 				{/* Progress */}
-				<Card class=''>
+				<Card class="">
 					<CardContent class="pt-4">
 						<div class="flex items-center gap-3">
 							<div class="flex-1">
@@ -267,20 +338,26 @@ function TaskDetail() {
 						</div>
 						<Show when={task()!.started_at}>
 							<div class="flex gap-2">
-								<span class="text-muted-foreground w-20 shrink-0">开始时间</span>
+								<span class="text-muted-foreground w-20 shrink-0">
+									开始时间
+								</span>
 								<span>{formatTime(task()!.started_at)}</span>
 							</div>
 						</Show>
 						<Show when={task()!.completed_at}>
 							<div class="flex gap-2">
-								<span class="text-muted-foreground w-20 shrink-0">完成时间</span>
+								<span class="text-muted-foreground w-20 shrink-0">
+									完成时间
+								</span>
 								<span>{formatTime(task()!.completed_at)}</span>
 							</div>
 						</Show>
 						<Show when={task()!.session_path}>
 							<div class="flex gap-2">
 								<span class="text-muted-foreground w-20 shrink-0">路径</span>
-								<span class="font-mono text-xs truncate">{task()!.session_path}</span>
+								<span class="font-mono text-xs truncate">
+									{task()!.session_path}
+								</span>
 							</div>
 						</Show>
 						<Show when={isFailed() && task()!.error_message}>
@@ -300,12 +377,20 @@ function TaskDetail() {
 						</CardHeader>
 						<CardContent class="space-y-3 text-sm">
 							<div class="rounded-lg bg-muted/50 p-3">
-								<p class="mb-1 text-xs font-medium text-muted-foreground">原文</p>
-								<p class="whitespace-pre-wrap break-words">{description()!.src}</p>
+								<p class="mb-1 text-xs font-medium text-muted-foreground">
+									原文
+								</p>
+								<p class="whitespace-pre-wrap break-words">
+									{description()!.src}
+								</p>
 							</div>
 							<div class="rounded-lg bg-muted/50 p-3">
-								<p class="mb-1 text-xs font-medium text-muted-foreground">中文</p>
-								<p class="whitespace-pre-wrap break-words">{description()!.dst}</p>
+								<p class="mb-1 text-xs font-medium text-muted-foreground">
+									中文
+								</p>
+								<p class="whitespace-pre-wrap break-words">
+									{description()!.dst}
+								</p>
 							</div>
 						</CardContent>
 					</Card>
@@ -315,9 +400,7 @@ function TaskDetail() {
 				<Card>
 					<CardHeader>
 						<CardTitle>处理流程</CardTitle>
-						<CardDescription>
-							点击单个节点可单独重跑该步骤
-						</CardDescription>
+						<CardDescription>点击单个节点可单独重跑该步骤</CardDescription>
 					</CardHeader>
 					<CardContent class="px-0">
 						<ul class="flex flex-col">
@@ -329,7 +412,9 @@ function TaskDetail() {
 											{/* Connector line */}
 											<div class="flex flex-col items-center">
 												<div class="flex h-8 w-8 items-center justify-center">
-													<Icon class={`size-4 ${stageIconClass(stage.status)}`} />
+													<Icon
+														class={`size-4 ${stageIconClass(stage.status)}`}
+													/>
 												</div>
 												<Show when={index() < stages().length - 1}>
 													<div class="h-full w-px bg-border" />
@@ -338,8 +423,12 @@ function TaskDetail() {
 											{/* Content */}
 											<div class="flex-1 min-w-0">
 												<div class="flex items-center gap-2">
-													<span class="text-xs text-muted-foreground">#{index() + 1}</span>
-													<span class="text-sm font-medium">{stageLabel(stage.name)}</span>
+													<span class="text-xs text-muted-foreground">
+														#{index() + 1}
+													</span>
+													<span class="text-sm font-medium">
+														{stageLabel(stage.name)}
+													</span>
 													<Badge class={stageBadgeClass(stage.status)}>
 														{statusLabel(stage.status)}
 													</Badge>
@@ -349,7 +438,13 @@ function TaskDetail() {
 														<span>{formatTime(stage.started_at)}</span>
 													</Show>
 													<Show when={stage.completed_at}>
-														<span>· {formatDuration(stage.started_at, stage.completed_at)}</span>
+														<span>
+															·{' '}
+															{formatDuration(
+																stage.started_at,
+																stage.completed_at,
+															)}
+														</span>
 													</Show>
 													<Show when={stage.last_message}>
 														<span>· {stage.last_message}</span>
@@ -394,8 +489,11 @@ function TaskDetail() {
 								src={finalVideoUrl(params().id)}
 								preload="metadata"
 							>
+								<track kind="captions" />
 							</video>
-							 <p class="break-all text-xs text-muted-foreground">{task()?.final_video_path}</p>
+							<p class="break-all text-xs text-muted-foreground">
+								{task()?.final_video_path}
+							</p>
 						</CardContent>
 						<CardFooter class="flex gap-2">
 							<a
@@ -426,15 +524,15 @@ function TaskDetail() {
 						<CardTitle>{m.task_runLog()}</CardTitle>
 					</CardHeader>
 					<CardContent class="px-0">
-							{logLines().length > 0 ? (
-				<pre class="max-h-96 overflow-auto px-4 text-xs leading-relaxed font-mono">
-								<For each={logLines()}>
-									{(line) => <div>{line}</div>}
-								</For>
+						{logLines().length > 0 ? (
+							<pre class="max-h-96 overflow-auto px-4 text-xs leading-relaxed font-mono">
+								<For each={logLines()}>{(line) => <div>{line}</div>}</For>
 							</pre>
-							): (<div class="px-4 py-8 text-center text-sm text-muted-foreground">
-									{m.task_emptyLog()}
-								</div>)}
+						) : (
+							<div class="px-4 py-8 text-center text-sm text-muted-foreground">
+								{m.task_emptyLog()}
+							</div>
+						)}
 					</CardContent>
 				</Card>
 
@@ -442,9 +540,7 @@ function TaskDetail() {
 				<Card>
 					<CardHeader>
 						<CardTitle class="text-red-600">危险操作</CardTitle>
-						<CardDescription>
-							这些操作不可撤销
-						</CardDescription>
+						<CardDescription>这些操作不可撤销</CardDescription>
 					</CardHeader>
 					<CardContent class="space-y-3">
 						{/* Resume */}
@@ -460,10 +556,7 @@ function TaskDetail() {
 									disabled={resuming()}
 									onClick={handleResume}
 								>
-									<Show
-										when={resuming()}
-										fallback={<Play class="size-3.5" />}
-									>
+									<Show when={resuming()} fallback={<Play class="size-3.5" />}>
 										<Loader2 class="size-3.5 animate-spin" />
 									</Show>
 									继续

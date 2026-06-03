@@ -79,8 +79,21 @@ export class VoxCPM {
     const cfg = options.cfgValue ?? CFG.defaultCfgValue;
     const minPatches = options.minPatches ?? CFG.minLen;
 
+    // Reload VAE sessions if they were released by a previous generate() call
+    const vaeOpts: ort.InferenceSession.SessionOptions = { executionProviders: this.vaeEp };
+    if (!this.vaeEnc) {
+      this.vaeEnc = await ort.InferenceSession.create(`${this.modelDir}/audio_vae_encoder.onnx`, vaeOpts);
+    }
+    if (!this.vaeDec) {
+      this.vaeDec = await ort.InferenceSession.create(`${this.modelDir}/audio_vae_decoder.onnx`, vaeOpts);
+    }
+
     // 1. Encode reference WAV
     const refFeat = await this._encodeWav(options.referenceWavPath);
+
+    // Release VAE Encoder session to avoid Dawn resource leak
+    await this.vaeEnc.release();
+    this.vaeEnc = undefined;
 
     // 2. Tokenize text
     const textIds = await this._tokenize(options.text);
@@ -221,6 +234,10 @@ export class VoxCPM {
     const aeOut = await this.vaeDec!.run(decFeeds);
     const audioTensor = aeOut['audio'] as ort.Tensor;
     const audioData = audioTensor.data as Float32Array;
+
+    // Release VAE Decoder session to avoid Dawn resource leak
+    await this.vaeDec.release();
+    this.vaeDec = undefined;
 
     console.log(`[VoxCPM] Generated ${audioData.length} samples at ${CFG.outSampleRate}Hz`);
     return audioData;

@@ -1,19 +1,19 @@
-
 import { cn } from '@repo/shared/lib/utils';
-import { ComponentProps, splitProps } from 'solid-js';
+import { type ComponentProps, splitProps } from 'solid-js';
 
-export function Card(props: ComponentProps<'div'> & { size?: 'default' | 'sm' }) {
+export function Card(
+	props: ComponentProps<'div'> & { size?: 'default' | 'sm' },
+) {
 	const [local, others] = splitProps(props, ['class', 'size']);
 	return (
 		<div
 			{...others}
 			data-slot="card"
-			data-size={local.size||'default'}
+			data-size={local.size || 'default'}
 			class={cn(
-				'ring-foreground/10 bg-card text-card-foreground gap-4 overflow-hidden rounded-xl py-4 text-sm ring-1 has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl group/card flex flex-col',
+				'ring-foreground/10 bg-card text-card-foreground gap-4 overflow-hidden rounded-sm py-4 text-sm  has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl group/card flex flex-col',
 				local.class,
 			)}
-			
 		/>
 	);
 }
@@ -97,7 +97,6 @@ function CardFooter(props: ComponentProps<'div'>) {
 }
 
 export {
-
 	CardAction,
 	CardContent,
 	CardDescription,

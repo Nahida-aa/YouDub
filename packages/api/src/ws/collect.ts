@@ -1,7 +1,7 @@
 import { Server as Engine } from '@socket.io/bun-engine';
 import { desc, eq } from 'drizzle-orm';
 import { db } from '#/db/index.ts';
-import { settings } from '#/feat/settings/table.ts';
+import type { settings } from '#/feat/settings/table.ts';
 import { tasks } from '#/feat/tasks/table.ts';
 import type { TransactionPayload } from '#/ws/types.ts';
 
@@ -38,29 +38,6 @@ function toTaskInsert(data: Record<string, unknown>): Partial<TaskInsert> {
 export function assertCollection(id: string): asserts id is CollectionId {
 	if (id !== 'tasks' && id !== 'settings') {
 		throw new Error(`Unsupported collection: ${id}`);
-	}
-}
-
-export function listTasks(): TaskRow[] {
-	return db
-		.select()
-		.from(tasks)
-		.orderBy(desc(tasks.created_at), desc(tasks.id))
-		.all();
-}
-
-export function listSettings(): SettingsRow[] {
-	return db.select().from(settings).orderBy(desc(settings.updatedAt)).all();
-}
-
-export function listCollectionRows(
-	id: CollectionId,
-): TaskRow[] | SettingsRow[] {
-	switch (id) {
-		case 'tasks':
-			return listTasks();
-		case 'settings':
-			return listSettings();
 	}
 }
 

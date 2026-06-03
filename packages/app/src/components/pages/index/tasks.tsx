@@ -85,6 +85,7 @@ export function TasksHistory() {
 			isLoading: isLoading(),
 		});
 	});
+	const queuedCount = () => tasks().filter((t) => isActive(t.status)).length;
 	return (
 		<Card>
 			<CardHeader>
@@ -92,6 +93,14 @@ export function TasksHistory() {
 			</CardHeader>
 			<CardContent class="px-0">
 				{isLoading() && <div>tasks Loading...</div>}
+				<Show when={queuedCount() > 0}>
+					<p class="text-xs text-muted-foreground">
+						{queuedCount()} 个任务进行中
+					</p>
+				</Show>
+				<Show when={queuedCount() === 0}>
+					<span />
+				</Show>
 				{tasks().length === 0 && (
 					<div class="px-6 py-12 text-center text-sm text-muted-foreground">
 						暂无任务

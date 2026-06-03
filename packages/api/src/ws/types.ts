@@ -91,6 +91,10 @@ export interface ClientToServerEvents {
 	'ml:voxcpm:check': () => void;
 	subscribe: (data: { topic: string }) => void;
 	unsubscribe: (data: { topic: string }) => void;
+	createTask: (
+		url: string,
+		callback: (res: Ret<{ id: string }>) => void,
+	) => void;
 	loadSubset: (
 		payload: LoadSubsetPayload,
 		callback: (res: Ret<Array<Record<string, unknown>>>) => void,
