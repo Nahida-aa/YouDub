@@ -8,7 +8,7 @@ import type {
 	UpdateMutationFnParams,
 	UtilsRecord,
 } from '@tanstack/solid-db';
-import { fromTanDb } from 'agnostic-query/tanstack-db';
+import { fromTanDb } from 'agnostic-query/tanstack-db.js';
 import type { Socket } from 'socket.io-client';
 import type { StandardSchemaV1 } from '#/components/socket/socketCollection/schema.ts';
 import { emitAck } from '#/components/socket/socketCollection/utils.ts';
