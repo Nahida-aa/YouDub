@@ -38,9 +38,11 @@ io.on('connection', async (socket) => {
 
 	// 发送欢迎消息
 	socket.emit('echo', { hello: 'Welcome to YouDub WebSocket API' });
+
 	socket.on('test:event', (data) => {
 		console.log('Received test:event with data:', data);
 		socket.emit('test:event', { message: 'Test event received!' });
+
 		io.emit('broadcast:event', {
 			message: `Client ${socket.id} says hello to everyone!`,
 		});
