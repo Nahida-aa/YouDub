@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { DEMUCS_DIR } from '#/config/config.ts';
 
-export const DEMUCS_MODEL_PATH = '/home/aa/repos/learn_ls/YouDub-webui/data/models/demucs';
+export { DEMUCS_DIR as DEMUCS_MODEL_PATH };
 
 export interface ModelStatus {
   exists: boolean;

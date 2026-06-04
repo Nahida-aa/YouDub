@@ -1,9 +1,8 @@
-import { join, dirname } from 'node:path';
-import { mkdirSync, existsSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { mkdirSync, existsSync } from 'node:fs';
+import { WHISPER_ONNX_DIR } from '#/config/config.ts';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-export const WHISPER_MODEL_PATH = join(__dirname, '..', '..', '..', '..', '..', 'data', 'models', 'whisper-large-v3-turbo');
+export { WHISPER_ONNX_DIR as WHISPER_MODEL_PATH };
 
 const HF_BASE = 'https://huggingface.co/onnx-community/whisper-large-v3-turbo_timestamped/resolve/main';
 

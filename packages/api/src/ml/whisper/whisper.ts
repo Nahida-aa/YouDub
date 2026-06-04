@@ -1,11 +1,8 @@
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { InferenceSession, Tensor } from 'onnxruntime-node';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const MODEL_PATH = join(__dirname, '..', '..', '..', '..', '..', 'data', 'models', 'sherpa-whisper-turbo');
+import { SHERPA_WHISPER_DIR } from '#/config/config.ts';
 
 const VOCAB_SIZE = 51866;
 const DECODER_START_TOKEN = 50258;
@@ -17,13 +14,13 @@ let decoderSession: InferenceSession | null = null;
 async function loadSessions() {
 	if (!encoderSession) {
 		encoderSession = await InferenceSession.create(
-			join(MODEL_PATH, 'turbo-encoder.int8.onnx'),
+			join(SHERPA_WHISPER_DIR, 'turbo-encoder.int8.onnx'),
 			{ executionProviders: ['cpu'] },
 		);
 	}
 	if (!decoderSession) {
 		decoderSession = await InferenceSession.create(
-			join(MODEL_PATH, 'turbo-decoder.int8.onnx'),
+			join(SHERPA_WHISPER_DIR, 'turbo-decoder.int8.onnx'),
 			{ executionProviders: ['cpu'] },
 		);
 	}
@@ -121,7 +118,7 @@ function loadAudio(filePath: string): Float32Array {
 
 // ---- Token decoding ----
 function loadTokens(): string[] {
-	const text = readFileSync(join(MODEL_PATH, 'turbo-tokens.txt'), 'utf-8');
+	const text = readFileSync(join(SHERPA_WHISPER_DIR, 'turbo-tokens.txt'), 'utf-8');
 	return text.trim().split('\n');
 }
 

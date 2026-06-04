@@ -1,15 +1,36 @@
 import { existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { WHISPER_ONNX_DIR } from '#/config/config.ts';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-export const WHISPER_MODEL_PATH = join(__dirname, '..', '..', '..', '..', '..', 'data', 'models', 'whisper-large-v3-turbo');
+export { WHISPER_ONNX_DIR as WHISPER_MODEL_PATH };
 
 export interface ModelStatus {
   exists: boolean;
   isReady: boolean;
-  size?: string;
   missingFiles: string[];
+}
+
+export async function checkWhisperStatus(): Promise<ModelStatus> {
+  const onnxFiles = [
+    'onnx/encoder_model.onnx',
+    'onnx/decoder_model_merged.onnx',
+  ];
+
+  const missingFiles: string[] = [];
+
+  let onnxReady = true;
+  for (const file of onnxFiles) {
+    if (!existsSync(join(WHISPER_ONNX_DIR, file))) {
+      missingFiles.push(file);
+      onnxReady = false;
+    }
+  }
+
+  return {
+    exists: onnxReady,
+    isReady: onnxReady,
+    missingFiles,
+  };
 }
 
 const REQUIRED_FILES = [

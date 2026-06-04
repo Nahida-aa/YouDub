@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { VOXCPM_DIR } from '#/config/config.ts';
 
-export const VOXCPM_MODEL_PATH = '/home/aa/repos/learn_ls/YouDub-webui/data/modelscope/OpenBMB__VoxCPM2';
+export { VOXCPM_DIR as VOXCPM_MODEL_PATH };
 
 export interface ModelStatus {
   exists: boolean;
