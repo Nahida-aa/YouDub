@@ -143,11 +143,6 @@ io.on('connection', async (socket) => {
 			const id = ret.id;
 			enqueue(ret.id);
 
-			io.emit('transaction', {
-				id: 'tasks',
-				transactionId: crypto.randomUUID(),
-				mutations: [{ type: 'insert', data: ret }],
-			});
 			return { id };
 		}),
 	);
