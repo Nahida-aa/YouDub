@@ -368,7 +368,6 @@ function TaskDetail() {
 							<For each={STAGE_ORDER}>
 								{(stageName, index) => {
 									const stage = () => stagesMap().get(stageName);
-									console.log('Rendering stage', stageName, stage);
 									const Icon = stageIcon(stage()?.status);
 									return (
 										<li class="flex items-center gap-3 border-b border-border/60 px-4 py-3 last:border-b-0">
