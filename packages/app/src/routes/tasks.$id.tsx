@@ -45,7 +45,6 @@ import {
 	getTaskLog,
 	rerunStage,
 	resumeTask,
-	translateTaskDescription,
 } from '../lib/api';
 
 export const Route = createFileRoute('/tasks/$id')({
@@ -185,18 +184,6 @@ function TaskDetail() {
 	const [deleting, setDeleting] = createSignal(false);
 	const [resuming, setResuming] = createSignal(false);
 	const [stageRerunning, setStageRerunning] = createSignal<string | null>(null);
-	const [translatingDesc, setTranslatingDesc] = createSignal(false);
-
-	async function handleTranslateDesc() {
-		setTranslatingDesc(true);
-		try {
-			await translateTaskDescription(id());
-		} catch (err) {
-			alert(err instanceof Error ? err.message : '翻译简介失败');
-		} finally {
-			setTranslatingDesc(false);
-		}
-	}
 
 	async function handleDelete() {
 		setDeleting(true);
@@ -460,7 +447,7 @@ function TaskDetail() {
 						</CardContent>
 						<CardFooter class="flex gap-2">
 							<a
-								href={finalVideoDownloadUrl(id())}
+								href={finalVideoDownloadUrl(task()?.final_video_path!)}
 								download={task()?.title || 'video'}
 							>
 								<Button variant="outline" size="sm">
@@ -468,15 +455,6 @@ function TaskDetail() {
 									下载视频
 								</Button>
 							</a>
-							<Button
-								variant="outline"
-								size="sm"
-								disabled={translatingDesc()}
-								onClick={handleTranslateDesc}
-							>
-								<Languages class="size-4" />
-								翻译简介
-							</Button>
 						</CardFooter>
 					</Card>
 				</Show>

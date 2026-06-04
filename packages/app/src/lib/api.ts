@@ -1,3 +1,4 @@
+import { client } from '@repo/api/src/client';
 import { socket } from '#/components/socket/ws.ts';
 
 const API_BASE =
@@ -134,19 +135,6 @@ export function rerunStage(
 	});
 }
 
-export const createTask = async (url: string) => {
-	const ret = await socket.emitWithAck('createTask', url);
-	if (ret.ok === false) {
-		throw new Error(ret.error.msg);
-	}
-	return ret.data;
-	// if (ret) {
-	// return request(`/api/tasks`, {
-	// 	method: 'POST',
-	// 	body: JSON.stringify({ url }),
-	// });
-};
-
 export function uploadLocalTask(
 	file: File,
 	direction: LocalDirection,
@@ -166,60 +154,11 @@ export function uploadLocalTask(
 	});
 }
 
-export interface TaskDescription {
-	src: string;
-	dst: string;
-}
-
-export function translateTaskDescription(id: string): Promise<TaskDescription> {
-	return request(`/api/tasks/${id}/translate-description`, { method: 'POST' });
-}
-
 export function finalVideoUrl(final_video_path: string): string {
+	client.finalVideoUrl.$get({ query: { final_video_path } }); // 预热接口
 	return `${API_BASE}/api/finalVideoUrl?final_video_path=${encodeURIComponent(final_video_path)}`;
 }
 
-export function finalVideoDownloadUrl(id: string): string {
-	return `${API_BASE}/api/tasks/${id}/artifact/final-video?download=1`;
-}
-
-export const getCookieInfo = async () => {
-	// const res = await socket.emitWithAck('get_youtube_cookie');
-	// if (res.ok === false) {
-	// 	throw new Error(res.error.msg);
-	// }
-	// return res.data;
-	// // return await socket.emitWithAck('get_youtube_cookie');
-	return await request<CookieInfo>('/api/get_youtube_cookie');
-};
-
-export const saveCookie = async (content: string) => {
-	return await socket.emitWithAck('save_youtube_cookie', content);
-	// return request('/api/cookies/youtube', {
-	// 	method: 'POST',
-	// 	body: JSON.stringify({ content }),
-	// });
-};
-
-export function getOpenAISettings(): Promise<OpenAISettings> {
-	return request('/api/settings/openai');
-}
-
-export function saveOpenAISettings(
-	settings: OpenAISettingsUpdate,
-): Promise<OpenAISettings> {
-	return request('/api/settings/openai', {
-		method: 'POST',
-		body: JSON.stringify(settings),
-	});
-}
-
-export function getOpenAIModels(settings: {
-	base_url: string;
-	api_key: string;
-}): Promise<OpenAIModels> {
-	return request('/api/settings/openai/models', {
-		method: 'POST',
-		body: JSON.stringify(settings),
-	});
+export function finalVideoDownloadUrl(final_video_path: string): string {
+	return `${API_BASE}/api/finalVideoUrl?final_video_path=${encodeURIComponent(final_video_path)}&download=true`;
 }

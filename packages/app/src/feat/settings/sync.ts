@@ -21,6 +21,25 @@ export const tasksCollect = createCollection(
 	}),
 );
 
+export const cookieInfoQ = queryOptions({
+	queryKey: ['cookieInfo'],
+	queryFn: async () => {
+		const res = await client.get_youtube_cookie.$get();
+		if (!res.ok) {
+			throw new Error('Failed to fetch YouTube cookie info');
+		}
+		return await res.json();
+	},
+});
+
+export const saveCookie = async (content: string) => {
+	return await socket.emitWithAck('save_youtube_cookie', content);
+	// return request('/api/cookies/youtube', {
+	// 	method: 'POST',
+	// 	body: JSON.stringify({ content }),
+	// });
+};
+
 export const ytdlpSettingsQ = queryOptions({
 	queryKey: ['ytdlpSettings'],
 	queryFn: getYtdlpSettings,
@@ -62,7 +81,7 @@ export const getOpenAIModels = async (input: GetOpenAIModelsInput) => {
 	const res = await client.get_openai_models.$put({ json: input });
 	const ret = await res.json();
 	if (!ret.ok) {
-		throw new Error('Failed to fetch OpenAI models');
+		throw new Error(ret.msg);
 	}
 	return ret;
 };

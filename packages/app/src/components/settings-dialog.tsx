@@ -1,3 +1,4 @@
+import { getDeviceInfo } from '@repo/api/src/client';
 import { m } from '@repo/shared/i18n/paraglide/messages';
 import {
 	getLocale,
@@ -18,6 +19,7 @@ import {
 // #/components/base/dialog.tsx
 import { Input } from '@repo/ui-solid/base/input';
 import { Label } from '@repo/ui-solid/base/label';
+import { toast } from '@repo/ui-solid/base/sonner';
 import { Textarea } from '@repo/ui-solid/base/textarea';
 import { toastError } from '@repo/ui-solid/custom/toast';
 import { useAppForm } from '@repo/ui-solid/form/useAppForm';
@@ -27,45 +29,19 @@ import { useSelector } from '@tanstack/solid-store';
 import { Eye, EyeOff, RefreshCw, Settings } from 'lucide-solid';
 import { createEffect, createSignal, Show } from 'solid-js';
 import {
+	cookieInfoQ,
 	getOpenAIModels,
 	openAISettings,
+	saveCookie,
 	saveOpenAISettings,
 	saveYtdlpSettings,
 	ytdlpSettingsQ,
 } from '#/feat/settings/sync.ts';
-import {
-	getCookieInfo,
-	// getOpenAIModels,
-	getOpenAISettings,
-	saveCookie,
-	// saveOpenAISettings,
-	// saveYtdlpSettings,
-} from '../lib/api';
 
 const localeNames: Record<string, string> = {
 	en: m.en?.(),
 	zh: m.zh?.(),
 };
-
-type SettingsForm = {
-	cookie: string;
-	baseUrl: string;
-	apiKey: string;
-	model: string;
-	translateConcurrency: string;
-	proxyPort: string;
-};
-const defaultSettings: SettingsForm = {
-	cookie: '',
-	baseUrl: 'https://api.openai.com/v1',
-	apiKey: '',
-	model: 'gpt-4o-mini',
-	translateConcurrency: '50',
-	proxyPort: '',
-};
-const SAVED_API_KEY_MASK = '********';
-const SAVED_COOKIE_SENTINEL = '__YOUDUB_SAVED_COOKIE__';
-type MessageKey = 'keySaved' | 'saved';
 
 const uniqueModels = (models: string[]) => {
 	return Array.from(
@@ -73,11 +49,12 @@ const uniqueModels = (models: string[]) => {
 	);
 };
 export function SettingsDialog() {
-	const currentLocale = getLocale();
-	const cookieQuery = createQuery(() => ({
-		queryKey: ['cookie'],
-		queryFn: getCookieInfo,
+	const deviceInfoQuery = createQuery(() => ({
+		queryKey: ['deviceInfo'],
+		queryFn: getDeviceInfo,
 	}));
+	const currentLocale = getLocale();
+	const cookieQuery = createQuery(() => cookieInfoQ);
 	const ytdlpSettingsQuery = createQuery(() => ytdlpSettingsQ);
 	const openaiQuery = createQuery(() => openAISettings);
 	const form = useAppForm(() => ({
@@ -109,7 +86,6 @@ export function SettingsDialog() {
 	const [modelOptions, setModelOptions] = createSignal<string[]>([
 		'gpt-4o-mini',
 	]);
-	const [translateConcurrency, setTranslateConcurrency] = createSignal('50');
 	const getOpenAIModelsMut = useMutation(() => ({
 		mutationFn: getOpenAIModels,
 		onSuccess: (data) => {
@@ -130,11 +106,9 @@ export function SettingsDialog() {
 	return (
 		<Dialog>
 			<DialogTrigger
-				class={cn(
-					buttonVariants({
-						variant: 'outline',
-					}),
-				)}
+				class={buttonVariants({
+					variant: 'outline',
+				})}
 			>
 				<Settings class="size-4" />
 				{m.settings_button()}
@@ -190,18 +164,12 @@ export function SettingsDialog() {
 									<form.AppField
 										name="model"
 										children={(field) => (
-											<field.SelectField options={modelOptions()} />
+											<field.SelectField
+												options={modelOptions()}
+												class="max-h-200"
+											/>
 										)}
 									/>
-									{/* <div class="grid gap-2">
-										<Label for="model">模型</Label>
-										<Input
-											id="model"
-											value={model()}
-											onInput={(e) => setModel(e.currentTarget.value)}
-											placeholder="gpt-4o-mini"
-										/>
-									</div> */}
 									<div class="grid gap-2 sm:self-end">
 										<Button
 											type="button"
@@ -223,23 +191,16 @@ export function SettingsDialog() {
 										</Button>
 									</div>
 								</div>
-								<div class="grid gap-2">
-									<Label for="translateConcurrency">翻译并发数</Label>
-									<Input
-										id="translateConcurrency"
-										type="number"
-										value={translateConcurrency()}
-										onInput={(e) =>
-											setTranslateConcurrency(
-												e.currentTarget.value.replace(/[^0-9]/g, ''),
-											)
-										}
-										placeholder="50"
-									/>
-									<p class="text-xs text-muted-foreground">
-										同时发送的翻译请求数量，根据 API 速率限制调整（推荐 10-50）
-									</p>
-								</div>
+								<form.AppField
+									name="translateConcurrency"
+									children={(field) => (
+										<field.InputField
+											title="翻译并发数"
+											placeholder="50"
+											description="同时发送的翻译请求数量，根据 API 速率限制调整（推荐 10-50）"
+										/>
+									)}
+								/>
 							</div>
 						</div>
 						<DialogFooter class="shrink-0">

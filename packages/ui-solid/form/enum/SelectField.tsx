@@ -68,7 +68,7 @@ export const SelectField = <T extends ObjOptions | string>(
 						}
 					</SelectValue>
 				</SelectTrigger>
-				<SelectContent />
+				<SelectContent class="max-h-72 overflow-y-auto" />
 			</Select>
 		</FieldX>
 	);

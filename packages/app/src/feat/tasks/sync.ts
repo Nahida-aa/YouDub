@@ -50,3 +50,11 @@ export const stagesQByTaskId = (taskId: string) => (q: InitialQueryBuilder) =>
 		.from({ stages: taskStagesCollect })
 		.where(({ stages }) => eq(stages.task_id, taskId))
 		.select(({ stages }) => stages);
+
+export const createTask = async (url: string) => {
+	const ret = await socket.emitWithAck('createTask', url);
+	if (ret.ok === false) {
+		throw new Error(ret.error.msg);
+	}
+	return ret.data;
+};

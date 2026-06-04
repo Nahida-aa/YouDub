@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { join } from 'node:path';
 import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
+import OpenAI from 'openai';
 import { z } from 'zod';
 import { REPO_ROOT } from '#/config/config.ts';
 import { get_youtube_cookie } from '#/feat/settings/cookie.ts';
@@ -64,22 +65,20 @@ const app = new Hono()
 			);
 		}
 
-		const resp = await fetch(`${normalizeOpenAIBaseUrl(base_url)}/models`, {
-			headers: { Authorization: `Bearer ${api_key}` },
-		});
-		if (!resp.ok) {
+		try {
+			const client = new OpenAI({
+				apiKey: api_key,
+				baseURL: normalizeOpenAIBaseUrl(base_url),
+			});
+			const response = await client.models.list();
+			const models: string[] = [...new Set(response.data.map((m) => m.id))];
+			return c.json({ models, ok: true });
+		} catch (err: any) {
 			return c.json(
-				{
-					msg: `Failed to fetch models: ${resp.statusText}`,
-					ok: false,
-				} as const,
+				{ msg: `Failed to fetch models: ${err.message}`, ok: false } as const,
 				502,
 			);
 		}
-
-		const data = (await resp.json()) as { data: { id: string }[] };
-		const models: string[] = [...new Set(data.data.map((m: any) => m.id))];
-		return c.json({ models, ok: true });
 	});
 
 export default app;

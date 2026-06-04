@@ -1,6 +1,7 @@
 // import appCss from '@repo/shared/styles/index.css?url';
 
 import { Devtools } from '@repo/ui-solid/app/devtools';
+import { Toaster } from '@repo/ui-solid/base/sonner';
 import { ThemeProvider, themeScript } from '@repo/ui-solid/theme';
 import type { QueryClient } from '@tanstack/solid-query';
 import {
@@ -43,6 +44,7 @@ function RootComponent() {
 								<Outlet />
 							</main>
 						</div>
+						<Toaster duration={1000 * 10} />
 					</ThemeProvider>
 
 					<Devtools />

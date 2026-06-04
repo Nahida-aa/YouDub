@@ -5,21 +5,24 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { REPO_ROOT } from '#/config/config.ts';
 
-const app = new Hono().get(
-	'/finalVideoUrl',
-	zValidator(
-		'query',
-		z.object({
-			final_video_path: z.string(),
-		}),
-	),
-	async (c) => {
-		const final_video_path = c.req.valid('query').final_video_path;
-		const videoBuffer = fs.readFileSync(join(REPO_ROOT, final_video_path));
-		return c.body(videoBuffer, 200, {
-			'Content-Type': 'video/mp4',
-		});
-	},
-);
+const app = new Hono()
+	.get(
+		'/finalVideoUrl',
+		zValidator(
+			'query',
+			z.object({
+				final_video_path: z.string(),
+				download: z.boolean().optional(),
+			}),
+		),
+		async (c) => {
+			const final_video_path = c.req.valid('query').final_video_path;
+			const videoBuffer = fs.readFileSync(join(REPO_ROOT, final_video_path));
+			return c.body(videoBuffer, 200, {
+				'Content-Type': 'video/mp4',
+			});
+		},
+	)
+	.post('/uploadLocalFile');
 
 export default app;
