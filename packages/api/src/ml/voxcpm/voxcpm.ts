@@ -49,7 +49,7 @@ export class VoxCPM {
   ) {
     const ep = options?.executionProvider ?? 'cpu';
     this.transformerEp = [ep];
-    this.vaeEp = ep === 'webgpu' ? ['cpu'] : [ep];
+    this.vaeEp = [ep];
   }
 
   async load() {

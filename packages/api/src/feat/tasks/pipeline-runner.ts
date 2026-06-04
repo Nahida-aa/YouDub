@@ -6,8 +6,9 @@ import { eq, sql } from 'drizzle-orm';
 import { io } from '#/socket.io/io.ts';
 import { tasks, taskStages } from '#/feat/tasks/table.ts';
 import { STAGES } from '#/feat/tasks/stages.ts';
-import { extractVideoId } from '#/feat/tasks/validate.ts';
-import { LOG_DIR, SESSION_DIR, WORKFOLDER, openaiDefaults } from '#/config/config.ts';
+import { extractVideoId, isYouTubeUrl } from '#/feat/tasks/validate.ts';
+import { LOG_DIR, SESSION_DIR, WORKFOLDER, openaiDefaults, YOUTUBE_COOKIE_PATH } from '#/config/config.ts';
+import { env } from '#/config/env.ts';
 import { Demucs } from '#/ml/demucs/demucs.ts';
 import { transcribe as whisperTranscribe } from '#/ml/whisper/whisper.ts';
 import { VoxCPM } from '#/ml/voxcpm/voxcpm.ts';
@@ -121,12 +122,21 @@ async function stageDownload(taskId: string, sessionPath: string, url: string) {
   mkdirSync(mediaDir, { recursive: true });
   mkdirSync(join(sessionPath, 'metadata'), { recursive: true });
 
-  const r = spawnSync('yt-dlp', [
+  const ytArgs: string[] = [
     '-f', 'bestaudio[ext=m4a]+bestvideo[ext=mp4]/best[ext=mp4]/best',
     '--merge-output-format', 'mp4',
     '-o', join(mediaDir, 'video_source.%(ext)s'),
-    url,
-  ], { stdio: ['pipe', 'pipe', 'pipe'], timeout: 300_000 });
+  ];
+  const isYT = isYouTubeUrl(url);
+  if (isYT && existsSync(YOUTUBE_COOKIE_PATH)) {
+    ytArgs.push('--cookies', YOUTUBE_COOKIE_PATH);
+  }
+  if (isYT && env.YTDLP_PROXY_PORT) {
+    ytArgs.push('--proxy', `http://127.0.0.1:${env.YTDLP_PROXY_PORT}`);
+  }
+  ytArgs.push(url);
+
+  const r = spawnSync('yt-dlp', ytArgs, { stdio: ['pipe', 'pipe', 'pipe'], timeout: 300_000 });
 
   const dlErr = r.error;
   if (dlErr) throw new Error(`yt-dlp: ${dlErr.message}`);
@@ -136,7 +146,11 @@ async function stageDownload(taskId: string, sessionPath: string, url: string) {
 
   // Write info JSON separately
   try {
-    const infoR = spawnSync('yt-dlp', ['--dump-json', url], { stdio: ['pipe', 'pipe', 'pipe'], timeout: 30_000 });
+    const infoArgs = ['--dump-json'];
+    if (isYT && existsSync(YOUTUBE_COOKIE_PATH)) infoArgs.push('--cookies', YOUTUBE_COOKIE_PATH);
+    if (isYT && env.YTDLP_PROXY_PORT) infoArgs.push('--proxy', `http://127.0.0.1:${env.YTDLP_PROXY_PORT}`);
+    infoArgs.push(url);
+    const infoR = spawnSync('yt-dlp', infoArgs, { stdio: ['pipe', 'pipe', 'pipe'], timeout: 30_000 });
     if (infoR.status === 0 && infoR.stdout.length > 0) {
       writeFileSync(join(sessionPath, 'metadata', 'ytdlp_info.json'), infoR.stdout);
     }
@@ -252,7 +266,10 @@ async function stageAsrFix(taskId: string, sessionPath: string) {
   const asrFile = join(metadataDir, 'asr.json');
   const fixedFile = join(metadataDir, 'asr_fixed.json');
 
-  if (existsSync(fixedFile)) return;
+  if (existsSync(fixedFile)) {
+    await updateStageDB(taskId, 'asr_fix', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Already fixed' });
+    return;
+  }
 
   const data = JSON.parse(readFileSync(asrFile, 'utf-8'));
   const utterances = data.result.utterances;
@@ -279,7 +296,10 @@ async function stageTranslate(taskId: string, sessionPath: string) {
   const fixedFile = join(metadataDir, 'asr_fixed.json');
   const translationFile = join(metadataDir, 'translation.zh.json');
 
-  if (existsSync(translationFile)) return;
+  if (existsSync(translationFile)) {
+    await updateStageDB(taskId, 'translate', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Already translated' });
+    return;
+  }
 
   const data = JSON.parse(readFileSync(fixedFile, 'utf-8'));
   const utterances = data.result.utterances;
@@ -476,7 +496,7 @@ async function stageTts(taskId: string, sessionPath: string) {
     }
   }
 
-  const voxcpm = new VoxCPM();
+  const voxcpm = new VoxCPM(undefined, { executionProvider: 'webgpu' });
   await voxcpm.load();
 
   for (let i = 0; i < translation.length; i++) {
@@ -549,7 +569,10 @@ async function stageMergeAudio(taskId: string, sessionPath: string) {
 
   const dubbingFile = join(tmpDir, 'audio_dubbing.wav');
   const timingsFile = join(metadataDir, 'timings.json');
-  if (existsSync(dubbingFile) && existsSync(timingsFile)) return;
+  if (existsSync(dubbingFile) && existsSync(timingsFile)) {
+    await updateStageDB(taskId, 'merge_audio', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Already merged' });
+    return;
+  }
 
   const data = JSON.parse(readFileSync(translationFile, 'utf-8'));
   const translation = data.translation;
