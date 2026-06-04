@@ -6,10 +6,13 @@ import { save_youtube_cookie } from '#/feat/settings/cookie.ts';
 import { createTask, findTaskByVideoId } from '#/feat/tasks/fn.ts';
 import { extractVideoId } from '#/feat/tasks/validate.ts';
 import { enqueue } from '#/feat/tasks/worker.ts';
+import type {
+	ClientToServerEvents,
+	ServerToClientEvents,
+} from '#/socket.io/types.ts';
 import { applyTransaction, assertCollection } from '#/ws/collect.ts';
 import { errorHandler } from '#/ws/errors.ts';
 import { getTableInfo, tableRegistry } from '#/ws/registry.ts';
-import type { ClientToServerEvents, ServerToClientEvents } from '#/ws/types.ts';
 import { downloadVoxCPM } from '../ml/voxcpm/download';
 import { checkVoxCPMStatus } from '../ml/voxcpm/load';
 import { engine, io } from './io.ts';

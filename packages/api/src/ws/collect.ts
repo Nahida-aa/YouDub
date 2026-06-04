@@ -3,7 +3,7 @@ import { desc, eq, sql } from 'drizzle-orm';
 import { db } from '#/db/index.ts';
 import type { settings } from '#/feat/settings/table.ts';
 import { tasks } from '#/feat/tasks/table.ts';
-import type { TransactionPayload } from '#/ws/types.ts';
+import type { TransactionPayload } from '#/socket.io/types.ts';
 
 type TaskRow = typeof tasks.$inferSelect;
 type TaskInsert = typeof tasks.$inferInsert;
@@ -67,7 +67,9 @@ function applyDelete(id: string) {
 }
 
 const CONFLICT_SET = Object.fromEntries(
-	[...TASK_COLUMNS].filter((c) => c !== 'id').map((col) => [col, sql.raw(`excluded.${col}`)]),
+	[...TASK_COLUMNS]
+		.filter((c) => c !== 'id')
+		.map((col) => [col, sql.raw(`excluded.${col}`)]),
 );
 
 export function applyTransaction(payload: TransactionPayload) {
@@ -79,7 +81,11 @@ export function applyTransaction(payload: TransactionPayload) {
 					throw new Error('Insert mutation requires row data');
 				}
 				tx.insert(tasks)
-					.values(toTaskInsert(mutation.data as Record<string, unknown>) as TaskInsert)
+					.values(
+						toTaskInsert(
+							mutation.data as Record<string, unknown>,
+						) as TaskInsert,
+					)
 					.onConflictDoUpdate({
 						target: tasks.id,
 						set: CONFLICT_SET,
@@ -105,4 +111,3 @@ export function applyTransaction(payload: TransactionPayload) {
 		}
 	});
 }
-

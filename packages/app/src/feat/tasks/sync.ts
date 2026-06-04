@@ -8,7 +8,8 @@ import {
 	type InferCollectionType,
 	type InitialQueryBuilder,
 } from '@tanstack/solid-db';
-import { socketCollectionOptions } from '#/components/socket/socketCollection/collection.ts';
+// import { socketCollectionOptions } from '#/components/socket/socketCollection/collection.ts';
+import { socketCollectionOptions } from 'socket-collection/collection.ts';
 import { socket } from '#/components/socket/ws.ts';
 
 export const tasksCollect = createCollection(
