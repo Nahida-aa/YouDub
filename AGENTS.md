@@ -6,7 +6,7 @@ AMD Radeon 780M (RDNA 3), ROCm 7.2.3 → `.agents/hardware.md`
 ## Model device assignment
 | 模型 | 设备 | 原因 |
 |------|------|------|
-| Demucs (PyTorch) | CPU | GPU hang |
+| Demucs (PyTorch) | CPU | GPU hang, RTF ~2.0 (htdemucs, shifts=3, 5min 实测) |
 | Demucs (ONNX, onnxruntime-node) | CPU | **✅ 实际路径**，RTF ~1.0 单 CPU 即可实时 |
 | VoxCPM (PyTorch) | CPU | GPU segfault |
 | VoxCPM (onnxruntime-node WebGPU) | GPU (Vulkan/Dawn) | **✅ 主要路径**，VAE → CPU fallback（Dawn 多 session 资源泄漏 workaround），Prefill+Decode → WebGPU |

@@ -3,7 +3,7 @@ import { desc, eq, sql } from 'drizzle-orm';
 import { db } from '#/db/index.ts';
 import type { settings } from '#/feat/settings/table.ts';
 import { tasks } from '#/feat/tasks/table.ts';
-import type { TransactionPayload } from '#/socket.io/types.ts';
+import type { TransactionPayload } from '#/ws/types.ts';
 
 type TaskRow = typeof tasks.$inferSelect;
 type TaskInsert = typeof tasks.$inferInsert;
@@ -39,31 +39,6 @@ export function assertCollection(id: string): asserts id is CollectionId {
 	if (id !== 'tasks' && id !== 'settings') {
 		throw new Error(`Unsupported collection: ${id}`);
 	}
-}
-
-function applyInsert(data: Record<string, unknown>) {
-	const row = toTaskInsert(data);
-	if (!row.id) {
-		throw new Error('Task insert requires an id');
-	}
-	db.insert(tasks)
-		.values(row as TaskInsert)
-		.onConflictDoUpdate({
-			target: tasks.id,
-			set: row,
-		});
-}
-
-function applyUpdate(id: string, data: Record<string, unknown>) {
-	const row = toTaskInsert(data);
-	if (Object.keys(row).length === 0) {
-		return;
-	}
-	db.update(tasks).set(row).where(eq(tasks.id, id));
-}
-
-function applyDelete(id: string) {
-	db.delete(tasks).where(eq(tasks.id, id));
 }
 
 const CONFLICT_SET = Object.fromEntries(
