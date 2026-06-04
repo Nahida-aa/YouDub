@@ -4,7 +4,7 @@
 
 [submodule "submodule/CosyVoice"]
 	path = submodule/CosyVoice
-	url = https://github.com/FunAudioLLM/CosyVoice.git
+	url = git@github.com:Nahida-aa/CosyVoice.git
 [submodule "submodule/VoxCPM"]
 	path = submodule/VoxCPM
 	url = git@github.com:OpenBMB/VoxCPM.git
