@@ -198,3 +198,9 @@ node_modules
 pretrained_models/
 
 .agents/hardware.md
+
+# Root-level model artifacts (download scripts often write to CWD)
+/*.onnx
+/*.onnx_data
+/turbo-*
+/VP_*.json
