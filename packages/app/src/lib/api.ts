@@ -109,22 +109,10 @@ const createRequestFn =
 			return res.text() as unknown as Promise<T>;
 		}
 	};
-const request = createRequestFn({ baseUrl: API_BASE });
-
-export function listTasks(limit = 100): Promise<{ tasks: TaskSummary[] }> {
-	return request(`/api/tasks?limit=${limit}`);
-}
-
-export function getTask(id: string): Promise<Task> {
-	return request(`/api/tasks/${id}`);
-}
+export const request = createRequestFn({ baseUrl: API_BASE });
 
 export function getTaskLog(id: string): Promise<string> {
 	return request(`/api/tasks/${id}/log`);
-}
-
-export function deleteTask(id: string): Promise<void> {
-	return request(`/api/tasks/${id}`, { method: 'DELETE' });
 }
 
 export function rerunTask(id: string): Promise<Task> {
@@ -183,10 +171,6 @@ export interface TaskDescription {
 	dst: string;
 }
 
-export function getTaskDescription(id: string): Promise<TaskDescription> {
-	return request(`/api/tasks/${id}/description`);
-}
-
 export function translateTaskDescription(id: string): Promise<TaskDescription> {
 	return request(`/api/tasks/${id}/translate-description`, { method: 'POST' });
 }
@@ -199,9 +183,15 @@ export function finalVideoDownloadUrl(id: string): string {
 	return `${API_BASE}/api/tasks/${id}/artifact/final-video?download=1`;
 }
 
-export function getCookieInfo(): Promise<CookieInfo> {
-	return request('/api/cookies/youtube');
-}
+export const getCookieInfo = async () => {
+	// const res = await socket.emitWithAck('get_youtube_cookie');
+	// if (res.ok === false) {
+	// 	throw new Error(res.error.msg);
+	// }
+	// return res.data;
+	// // return await socket.emitWithAck('get_youtube_cookie');
+	return await request<CookieInfo>('/api/get_youtube_cookie');
+};
 
 export const saveCookie = async (content: string) => {
 	return await socket.emitWithAck('save_youtube_cookie', content);
@@ -229,19 +219,6 @@ export function getOpenAIModels(settings: {
 	api_key: string;
 }): Promise<OpenAIModels> {
 	return request('/api/settings/openai/models', {
-		method: 'POST',
-		body: JSON.stringify(settings),
-	});
-}
-
-export function getYtdlpSettings(): Promise<YtdlpSettings> {
-	return request('/api/settings/ytdlp');
-}
-
-export function saveYtdlpSettings(
-	settings: YtdlpSettings,
-): Promise<YtdlpSettings> {
-	return request('/api/settings/ytdlp', {
 		method: 'POST',
 		body: JSON.stringify(settings),
 	});

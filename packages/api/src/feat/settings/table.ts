@@ -10,5 +10,7 @@ import {
 export const settings = sqliteTable('settings', {
 	key: text().primaryKey(),
 	value: text().notNull(),
-	updatedAt: text('updated_at').notNull(),
+	updated_at: text()
+		.notNull()
+		.$defaultFn(() => new Date().toISOString()),
 });

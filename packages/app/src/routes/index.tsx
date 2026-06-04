@@ -1,3 +1,4 @@
+import { client, getDeviceInfo } from '@repo/api/src/client';
 import { Badge } from '@repo/ui-solid/base/badge';
 import { Button } from '@repo/ui-solid/base/button';
 import {
@@ -17,13 +18,14 @@ import {
 } from '@repo/ui-solid/base/select';
 import { useAppForm } from '@repo/ui-solid/form/useAppForm';
 import { useLiveQuery } from '@tanstack/solid-db';
+import { createQuery } from '@tanstack/solid-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/solid-router';
 import { ChevronRight, Play, Upload } from 'lucide-solid';
 import { createEffect, createSignal, For, onMount, Show } from 'solid-js';
 import { TasksHistory } from '#/components/pages/index/tasks.tsx';
 import { tasksCollect, tasksQ } from '#/feat/tasks/sync.ts';
 import type { LocalDirection, TaskSummary } from '../lib/api';
-import { createTask, listTasks, uploadLocalTask } from '../lib/api';
+import { createTask, uploadLocalTask } from '../lib/api';
 
 export const Route = createFileRoute('/')({
 	component: Home,
@@ -74,6 +76,10 @@ function stageLabel(name?: string): string {
 
 function Home() {
 	const navigate = useNavigate();
+	const deviceInfoQuery = createQuery(() => ({
+		queryKey: ['deviceInfo'],
+		queryFn: getDeviceInfo,
+	}));
 
 	let fileInputRef!: HTMLInputElement;
 

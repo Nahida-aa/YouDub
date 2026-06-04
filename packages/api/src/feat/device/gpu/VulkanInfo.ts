@@ -1,7 +1,7 @@
 import type { GpuInfo } from '#/feat/device/gpu/types.ts';
 import { bytesToGB, fmtBytes, run } from '#/feat/device/utils.ts';
 
-export function tryVulkanInfo(): GpuInfo[] | null {
+export function tryVulkanInfo(): GpuInfo[] {
 	const gpus: GpuInfo[] = [];
 
 	// 方案 1: vulkaninfo --json（信息最全，需要安装 Vulkan SDK）
@@ -109,5 +109,5 @@ export function tryVulkanInfo(): GpuInfo[] | null {
 		if (gpus.length > 0) return gpus;
 	}
 
-	return null;
+	return [];
 }

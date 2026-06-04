@@ -10,6 +10,7 @@
       },
       "devDependencies": {
         "@biomejs/biome": "2.4.16",
+        "openai": "^6.42.0",
       },
     },
     "apps/web": {
@@ -56,6 +57,7 @@
         "hono": "^4.12.23",
         "onnxruntime-node": "^1.26.0",
         "onnxruntime-node-gpu": "1.14.0",
+        "openai": "^6.42.0",
         "siokit": "^0.1.4",
         "socket.io": "^4.8.3",
         "socket.io-parser": "^4.2.6",
@@ -83,7 +85,7 @@
         "@tanstack/router-plugin": "^1.168.8",
         "@tanstack/solid-db": "^0.2.21",
         "@tanstack/solid-form": "^1.32.0",
-        "@tanstack/solid-query": "^5.100.11",
+        "@tanstack/solid-query": "^5.101.0",
         "@tanstack/solid-router": "^1.170.6",
         "@tanstack/solid-store": "^0.11.0",
         "@tauri-apps/api": "^2",
@@ -142,6 +144,7 @@
         "@tanstack/solid-devtools": "^0.8.5",
         "@tanstack/solid-form": "^1.32.0",
         "@tanstack/solid-form-devtools": "^0.2.27",
+        "@tanstack/solid-query": "^5.101.0",
         "@tanstack/solid-query-devtools": "^5.100.10",
         "@tanstack/solid-router": "^1.169.2",
         "@tanstack/solid-router-devtools": "^1.167.0",
@@ -707,7 +710,7 @@
 
     "@tanstack/pacer-lite": ["@tanstack/pacer-lite@0.2.2", "", {}, "sha512-eQ1MyLKCHyXiH7NbdmB80W77OhiMgGBUb+qDx/8WMGbwg5Lf/NlfD0TfNYAqY77i8V3AxoDoYdICrQE5ADw4Yw=="],
 
-    "@tanstack/query-core": ["@tanstack/query-core@5.100.11", "", {}, "sha512-lmE0994apShXPj8CUxgx4ch5yUJhE9k/+tVwihBvPOyerACWdBocfFg24t8+0RhtlTd7tEgchDkhlCxNssvDxw=="],
+    "@tanstack/query-core": ["@tanstack/query-core@5.101.0", "", {}, "sha512-cQetA74EB+seWySv1TTKr828TnP0u39m6LykwDXIo84SNortpDkp30TMEjkqtYCNP9c40uT/iwl6MLiufEt0Ow=="],
 
     "@tanstack/query-db-collection": ["@tanstack/query-db-collection@1.0.38", "", { "dependencies": { "@standard-schema/spec": "^1.1.0", "@tanstack/db": "0.6.7" }, "peerDependencies": { "@tanstack/query-core": "^5.0.0", "typescript": ">=4.7" } }, "sha512-cHD951MBgOvzI+/6367Bf3S88z5n9demxZ7+MfqxRJdXxaogF73h8Pjg+iB9Lnb4WZB8oU6g9eDexaZakLeiBA=="],
 
@@ -731,7 +734,7 @@
 
     "@tanstack/solid-form-devtools": ["@tanstack/solid-form-devtools@0.2.27", "", { "dependencies": { "@tanstack/devtools-utils": "^0.4.0", "@tanstack/form-devtools": "0.2.27" }, "peerDependencies": { "solid-js": ">=1.9.7" } }, "sha512-ya6qq5zuJ2xURZsWozcdxqP0TN6BEEGex6nOIuk6dSUPfSE19c9mMmmAZBQYcO7LjX4O3ecBJlQAAbBjiMwaUw=="],
 
-    "@tanstack/solid-query": ["@tanstack/solid-query@5.100.11", "", { "dependencies": { "@tanstack/query-core": "5.100.11" }, "peerDependencies": { "solid-js": "^1.6.0" } }, "sha512-T6elzjzSwzc0hr5Se+WlQHjBilxHA5q6w1XWYz72XhlUR66fQtcQdH/rtoJR/SOmRuwyHowR7IvsO/6JhraBxg=="],
+    "@tanstack/solid-query": ["@tanstack/solid-query@5.101.0", "", { "dependencies": { "@tanstack/query-core": "5.101.0" }, "peerDependencies": { "solid-js": "^1.6.0" } }, "sha512-XoPWynbaWquvSisMvUirakfD9OmLas1cOwt1gBDUTn8HC2CVkZm+O/jBgEa5SL5LrY6vxmWjzzskhXkywLfymw=="],
 
     "@tanstack/solid-query-devtools": ["@tanstack/solid-query-devtools@5.100.11", "", { "dependencies": { "@tanstack/query-devtools": "5.100.11" }, "peerDependencies": { "@tanstack/solid-query": "^5.100.11", "solid-js": "^1.6.0" } }, "sha512-Ynpc7jsLu2tIswDyAdNnhVAK8fCMaBhXTpGgbESVT/n0OhJ6KFu86pqZ+q6/JNdQrv7N/14t4sCMfwq9LigJCA=="],
 
@@ -1746,6 +1749,8 @@
     "onnxruntime-web": ["onnxruntime-web@1.26.0-dev.20260416-b7804b056c", "", { "dependencies": { "flatbuffers": "^25.1.24", "guid-typescript": "^1.0.9", "long": "^5.2.3", "onnxruntime-common": "1.24.0-dev.20251116-b39e144322", "platform": "^1.3.6", "protobufjs": "^7.2.4" } }, "sha512-MD6Ss4GSpQBo6zqoJzyT9LRbKYs7x/JVN23FT24EcEvlqF4VuzPOeH6X38orZPKHQDbprn7K+SBpu0/mj2CQiw=="],
 
     "open": ["open@11.0.0", "", { "dependencies": { "default-browser": "^5.4.0", "define-lazy-prop": "^3.0.0", "is-in-ssh": "^1.0.0", "is-inside-container": "^1.0.0", "powershell-utils": "^0.1.0", "wsl-utils": "^0.3.0" } }, "sha512-smsWv2LzFjP03xmvFoJ331ss6h+jixfA4UUV/Bsiyuu4YJPfN+FIQGOIiv4w9/+MoHkfkJ22UIaQWRVFRfH6Vw=="],
+
+    "openai": ["openai@6.42.0", "", { "peerDependencies": { "ws": "^8.18.0", "zod": "^3.25 || ^4.0" }, "optionalPeers": ["ws", "zod"] }, "sha512-1WFEt/uXMXOLhYRNkgJWo08Y2YNvNwpVU72K7ibrWgWpNOXd4VojXLbe6SQ4bLiUQ3Y8jz4IiyVkylJCL1DtZg=="],
 
     "optionator": ["optionator@0.9.4", "", { "dependencies": { "deep-is": "^0.1.3", "fast-levenshtein": "^2.0.6", "levn": "^0.4.1", "prelude-ls": "^1.2.1", "type-check": "^0.4.0", "word-wrap": "^1.2.5" } }, "sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g=="],
 

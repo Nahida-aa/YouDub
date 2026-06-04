@@ -3,7 +3,7 @@ import { io, type Socket } from 'socket.io-client';
 import { z } from 'zod';
 import { socketCollectionOptions } from './collection.ts';
 
-export const socket: Socket = io('http://localhost:9007', {
+const socket: Socket = io('http://localhost:9007', {
 	transports: ['websocket'], // 强制使用 websocket
 	path: '/ws',
 	autoConnect: false, // 需要手动连接，确保在组件挂载时才连接

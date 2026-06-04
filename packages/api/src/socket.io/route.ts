@@ -2,7 +2,10 @@ import { aq } from 'agnostic-query';
 import { toDb0 } from 'agnostic-query/db0/sqlite.js';
 // import { toDrizzle } from 'agnostic-query/drizzle/sqlite';
 import { db, sql } from '#/db/index';
-import { save_youtube_cookie } from '#/feat/settings/cookie.ts';
+import {
+	get_youtube_cookie,
+	save_youtube_cookie,
+} from '#/feat/settings/cookie.ts';
 import { createTask, findTaskByVideoId } from '#/feat/tasks/fn.ts';
 import { extractVideoId } from '#/feat/tasks/validate.ts';
 import { enqueue } from '#/feat/tasks/worker.ts';
@@ -29,6 +32,12 @@ const voxcpmPrepareTask: {
 io.on('connection', async (socket) => {
 	console.log('New client connected:', socket.id);
 
+	socket.on(
+		'get_youtube_cookie',
+		errorHandler(async () => {
+			return await get_youtube_cookie();
+		}),
+	);
 	socket.on(
 		'save_youtube_cookie',
 		errorHandler(async (input) => {

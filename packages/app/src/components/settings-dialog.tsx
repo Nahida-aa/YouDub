@@ -19,18 +19,27 @@ import {
 import { Input } from '@repo/ui-solid/base/input';
 import { Label } from '@repo/ui-solid/base/label';
 import { Textarea } from '@repo/ui-solid/base/textarea';
+import { toastError } from '@repo/ui-solid/custom/toast';
 import { useAppForm } from '@repo/ui-solid/form/useAppForm';
 import { createForm } from '@tanstack/solid-form';
+import { createQuery, useMutation } from '@tanstack/solid-query';
+import { useSelector } from '@tanstack/solid-store';
 import { Eye, EyeOff, RefreshCw, Settings } from 'lucide-solid';
 import { createEffect, createSignal, Show } from 'solid-js';
 import {
-	getCookieInfo,
 	getOpenAIModels,
-	getOpenAISettings,
-	getYtdlpSettings,
-	saveCookie,
+	openAISettings,
 	saveOpenAISettings,
 	saveYtdlpSettings,
+	ytdlpSettingsQ,
+} from '#/feat/settings/sync.ts';
+import {
+	getCookieInfo,
+	// getOpenAIModels,
+	getOpenAISettings,
+	saveCookie,
+	// saveOpenAISettings,
+	// saveYtdlpSettings,
 } from '../lib/api';
 
 const localeNames: Record<string, string> = {
@@ -65,102 +74,58 @@ const uniqueModels = (models: string[]) => {
 };
 export function SettingsDialog() {
 	const currentLocale = getLocale();
-	const [open, setOpen] = createSignal(false);
+	const cookieQuery = createQuery(() => ({
+		queryKey: ['cookie'],
+		queryFn: getCookieInfo,
+	}));
+	const ytdlpSettingsQuery = createQuery(() => ytdlpSettingsQ);
+	const openaiQuery = createQuery(() => openAISettings);
 	const form = useAppForm(() => ({
-		defaultValues: defaultSettings,
+		defaultValues: {
+			cookie: cookieQuery.data?.exists ? m.SAVED_COOKIE_SENTINEL() : '',
+			baseUrl: openaiQuery.data?.base_url ?? 'https://api.openai.com/v1',
+			apiKey: openaiQuery.data?.api_key ?? '',
+			model: openaiQuery.data?.model ?? 'gpt-4o-mini',
+			translateConcurrency: openaiQuery.data?.translate_concurrency ?? 50,
+			proxyPort: ytdlpSettingsQuery.data?.proxy_port ?? '',
+		},
 		onSubmit: async ({ value, formApi }) => {
-			setMessage('');
-			try {
-				if (formApi.getFieldMeta('cookie')?.isDirty) {
-					await saveCookie(
-						value.cookie === SAVED_COOKIE_SENTINEL ? '' : value.cookie,
-					);
-				}
-				const clearApiKey = apiKeyDirty() && !apiKey().trim();
-				const result = await saveOpenAISettings({
-					base_url: baseUrl(),
-					api_key: apiKeyDirty() ? apiKey() : '',
-					clear_api_key: clearApiKey,
-					model: model(),
-					translate_concurrency: translateConcurrency(),
-				});
-				const ytdlp = await saveYtdlpSettings({ proxy_port: proxyPort() });
-				setMessage('已保存');
-				setApiKey(
-					result.has_api_key ? result.api_key || SAVED_API_KEY_MASK : '',
+			if (formApi.getFieldMeta('cookie')?.isDirty) {
+				await saveCookie(
+					value.cookie === m.SAVED_COOKIE_SENTINEL() ? '' : value.cookie,
 				);
-				setTranslateConcurrency(
-					result.translate_concurrency || translateConcurrency(),
-				);
-				setProxyPort(ytdlp.proxy_port);
-				setCookieDirty(false);
-				setApiKeyDirty(false);
-			} catch (err) {
-				setMessage(err instanceof Error ? err.message : '保存失败');
 			}
+			const result = await saveOpenAISettings({
+				base_url: value.baseUrl,
+				api_key: value.apiKey,
+				model: value.model,
+				translate_concurrency: value.translateConcurrency,
+			});
+			const ytdlp = await saveYtdlpSettings(value.proxyPort);
+			console.log('已保存');
 		},
 	}));
-	const [cookie, setCookie] = createSignal('');
-	const [cookieDirty, setCookieDirty] = createSignal(false);
-	const [baseUrl, setBaseUrl] = createSignal('https://api.openai.com/v1');
-	const [apiKey, setApiKey] = createSignal('');
-	const [apiKeyDirty, setApiKeyDirty] = createSignal(false);
-	const [model, setModel] = createSignal('gpt-4o-mini');
+	const store = useSelector(form.store, (s) => s.values);
+	const [modelOptions, setModelOptions] = createSignal<string[]>([
+		'gpt-4o-mini',
+	]);
 	const [translateConcurrency, setTranslateConcurrency] = createSignal('50');
-	const [proxyPort, setProxyPort] = createSignal('');
-	const [message, setMessage] = createSignal('');
-	const [modelsLoading, setModelsLoading] = createSignal(false);
-	const [showApiKey, setShowApiKey] = createSignal(false);
-
-	const cookieValue = () =>
-		cookie() === SAVED_COOKIE_SENTINEL
-			? '已保存 Cookie（点击可修改）'
-			: cookie();
-
-	createEffect(() => {
-		if (!open()) return;
-		Promise.all([getCookieInfo(), getOpenAISettings(), getYtdlpSettings()])
-			.then(([ck, openai, ytdlp]) => {
-				setCookie(ck.exists ? SAVED_COOKIE_SENTINEL : '');
-				setBaseUrl(openai.base_url);
-				setApiKey(
-					openai.has_api_key ? openai.api_key || SAVED_API_KEY_MASK : '',
-				);
-				setModel(openai.model);
-				setTranslateConcurrency(openai.translate_concurrency || '50');
-				setProxyPort(ytdlp.proxy_port);
-
-				setShowApiKey(false);
-				setCookieDirty(false);
-				setApiKeyDirty(false);
-				setMessage(openai.has_api_key ? '密钥已保存' : '');
-			})
-			.catch((err) => {
-				setMessage(err instanceof Error ? err.message : '加载设置失败');
-			});
-	});
-	async function handleFetchModels() {
-		setMessage('');
-		setModelsLoading(true);
-		try {
-			const response = await getOpenAIModels({
-				base_url: baseUrl(),
-				api_key: apiKeyDirty() ? apiKey() : '',
-			});
-			if (response.models.length > 0) {
-				setModel(response.models[0]);
-			}
-			setMessage(
-				response.models.length
-					? `加载了 ${response.models.length} 个模型`
+	const getOpenAIModelsMut = useMutation(() => ({
+		mutationFn: getOpenAIModels,
+		onSuccess: (data) => {
+			const models = uniqueModels([store().model, ...data.models]);
+			setModelOptions(models);
+			console.log(
+				data.models.length
+					? `加载了 ${data.models.length} 个模型`
 					: '未找到模型',
 			);
-		} catch (err) {
-			setMessage(err instanceof Error ? err.message : '加载模型失败');
-		} finally {
-			setModelsLoading(false);
-		}
-	}
+		},
+		onError: (err) => {
+			console.log(err instanceof Error ? err.message : '加载模型失败');
+			toastError(err);
+		},
+	}));
 
 	return (
 		<Dialog>
@@ -168,7 +133,6 @@ export function SettingsDialog() {
 				class={cn(
 					buttonVariants({
 						variant: 'outline',
-						// class: 'rounded-xs',
 					}),
 				)}
 			>
@@ -189,16 +153,6 @@ export function SettingsDialog() {
 						</DialogHeader>
 						<div class="mt-4 min-h-0 overflow-y-auto pr-1">
 							<div class="grid gap-4 pb-4">
-								<div class="grid gap-2">
-									<Label for="proxyPort">代理端口</Label>
-									<Input
-										id="proxyPort"
-										type="number"
-										value={proxyPort()}
-										onInput={(e) => setProxyPort(e.currentTarget.value)}
-										placeholder="7890"
-									/>
-								</div>
 								<form.AppField
 									name="cookie"
 									children={(field) => (
@@ -209,54 +163,37 @@ export function SettingsDialog() {
 										/>
 									)}
 								/>
-								<div class="grid gap-2">
-									<Label for="baseUrl">API Base URL</Label>
-									<Input
-										id="baseUrl"
-										value={baseUrl()}
-										onInput={(e) => setBaseUrl(e.currentTarget.value)}
-										placeholder="https://api.openai.com/v1"
-									/>
-								</div>
-								<div class="grid gap-2">
-									<Label for="apiKey">API Key</Label>
-									<div class="relative">
-										<Input
-											id="apiKey"
-											type={showApiKey() ? 'text' : 'password'}
-											value={apiKey()}
-											onFocus={(e) => {
-												if (!apiKeyDirty() && apiKey() === SAVED_API_KEY_MASK) {
-													e.currentTarget.select();
-												}
-											}}
-											onInput={(e) => {
-												setApiKeyDirty(true);
-												setApiKey(
-													e.currentTarget.value.replace(SAVED_API_KEY_MASK, ''),
-												);
-											}}
-											placeholder="sk-..."
-											class="pr-9"
+								<form.AppField
+									name="proxyPort"
+									children={(field) => (
+										<field.InputField title="代理端口" placeholder="7890" />
+									)}
+								/>
+								<form.AppField
+									name="baseUrl"
+									children={(field) => (
+										<field.InputField
+											title="API Base URL"
+											placeholder="https://api.openai.com/v1"
 										/>
-										<Button
-											type="button"
-											variant="ghost"
-											size="icon"
-											class="absolute top-0 right-0"
-											onClick={() => setShowApiKey((v) => !v)}
-										>
-											<Show
-												when={showApiKey()}
-												fallback={<Eye class="size-4" />}
-											>
-												<EyeOff class="size-4" />
-											</Show>
-										</Button>
-									</div>
-								</div>
+									)}
+								/>
+
+								<form.AppField
+									name="apiKey"
+									children={(field) => (
+										<field.PasswordField title="API Key" placeholder="sk-..." />
+									)}
+								/>
+
 								<div class="grid gap-2 sm:grid-cols-[1fr_auto]">
-									<div class="grid gap-2">
+									<form.AppField
+										name="model"
+										children={(field) => (
+											<field.SelectField options={modelOptions()} />
+										)}
+									/>
+									{/* <div class="grid gap-2">
 										<Label for="model">模型</Label>
 										<Input
 											id="model"
@@ -264,16 +201,25 @@ export function SettingsDialog() {
 											onInput={(e) => setModel(e.currentTarget.value)}
 											placeholder="gpt-4o-mini"
 										/>
-									</div>
+									</div> */}
 									<div class="grid gap-2 sm:self-end">
 										<Button
 											type="button"
 											variant="secondary"
-											onClick={handleFetchModels}
-											disabled={modelsLoading() || !baseUrl().trim()}
+											onClick={() =>
+												getOpenAIModelsMut.mutate({
+													base_url: store().baseUrl,
+													api_key: store().apiKey,
+												})
+											}
+											disabled={
+												getOpenAIModelsMut.isPending || !store().baseUrl.trim()
+											}
 										>
 											<RefreshCw class="size-4" />
-											{modelsLoading() ? '加载中...' : '获取模型列表'}
+											{getOpenAIModelsMut.isPending
+												? '加载中...'
+												: '获取模型列表'}
 										</Button>
 									</div>
 								</div>
@@ -294,9 +240,6 @@ export function SettingsDialog() {
 										同时发送的翻译请求数量，根据 API 速率限制调整（推荐 10-50）
 									</p>
 								</div>
-								<Show when={message()}>
-									<p class="text-sm text-muted-foreground">{message()}</p>
-								</Show>
 							</div>
 						</div>
 						<DialogFooter class="shrink-0">

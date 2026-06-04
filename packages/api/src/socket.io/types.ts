@@ -13,7 +13,7 @@ export interface ClientToServerEvents extends CollectClientToServerEvents {
 		input: string,
 		result: (res: Ret<CookieInfo>) => void,
 	) => void;
-
+	get_youtube_cookie: (_: void, result: (res: Ret<CookieInfo>) => void) => void;
 	hello: () => void;
 	message: (data: string) => void;
 	msg: (text: string) => void;

@@ -40,11 +40,8 @@ import {
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import type { TaskStage } from '../lib/api';
 import {
-	deleteTask,
 	finalVideoDownloadUrl,
 	finalVideoUrl,
-	getTask,
-	getTaskDescription,
 	getTaskLog,
 	rerunStage,
 	resumeTask,
@@ -159,7 +156,11 @@ const STAGE_ORDER = [
 
 import { m } from '@repo/shared/i18n/paraglide/messages';
 import { useLiveQuery } from '@tanstack/solid-db';
-import { stagesQByTaskId, tasksQById } from '#/feat/tasks/sync.ts';
+import {
+	stagesQByTaskId,
+	tasksCollect,
+	tasksQById,
+} from '#/feat/tasks/sync.ts';
 
 function TaskDetail() {
 	const id = Route.useParams({ select: (s) => s.id });
@@ -200,7 +201,7 @@ function TaskDetail() {
 	async function handleDelete() {
 		setDeleting(true);
 		try {
-			await deleteTask(id());
+			await tasksCollect.delete(id()).isPersisted.promise;
 			navigate({ to: '/' });
 		} catch (err) {
 			alert(err instanceof Error ? err.message : '删除失败');

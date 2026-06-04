@@ -5,9 +5,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { REPO_ROOT } from '#/config/config.ts';
 
-const app = new Hono();
-
-app.get(
+const app = new Hono().get(
 	'/finalVideoUrl',
 	zValidator(
 		'query',

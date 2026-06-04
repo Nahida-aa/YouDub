@@ -1,7 +1,7 @@
-import { join } from 'node:path';
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
-import { REPO_ROOT } from '#/config/utils.ts';
+import { join } from 'node:path';
 import { env } from '#/config/env.ts';
+import { REPO_ROOT } from '#/config/utils.ts';
 
 export { REPO_ROOT };
 
@@ -33,7 +33,7 @@ export interface OpenAIDefaults {
 	baseUrl: string;
 	apiKey: string;
 	model: string;
-	translateConcurrency: number;
+	translateConcurrency: number; //
 }
 
 export function openaiDefaults(): OpenAIDefaults {
@@ -67,7 +67,14 @@ export function ytdlpDefaults(): YtDlpDefaults {
 
 // ── Ensure runtime directories exist ──
 export function ensureRuntimeDirs(): void {
-	for (const dir of [DATA_DIR, COOKIE_DIR, LOG_DIR, WORKFOLDER, MODEL_CACHE_DIR, SESSION_DIR]) {
+	for (const dir of [
+		DATA_DIR,
+		COOKIE_DIR,
+		LOG_DIR,
+		WORKFOLDER,
+		MODEL_CACHE_DIR,
+		SESSION_DIR,
+	]) {
 		mkdirSync(dir, { recursive: true });
 	}
 	// Migrate old cookie filename → match Python backend
@@ -76,6 +83,8 @@ export function ensureRuntimeDirs(): void {
 		try {
 			copyFileSync(oldCookie, YOUTUBE_COOKIE_PATH);
 			console.log('[config] Migrated youtube_cookie.txt → youtube.txt');
-		} catch { /* ignore */ }
+		} catch {
+			/* ignore */
+		}
 	}
 }

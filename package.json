@@ -14,7 +14,8 @@
     "packages/*"
   ],
   "devDependencies": {
-    "@biomejs/biome": "2.4.16"
+    "@biomejs/biome": "2.4.16",
+    "openai": "^6.42.0"
   },
   "dependencies": {
     "agnostic-query": "^1.10.5",

@@ -1,4 +1,4 @@
-import { environmentManager, QueryClient } from '@tanstack/query-core';
+import { environmentManager, QueryClient } from '@tanstack/solid-query';
 
 function makeQueryClient() {
 	return new QueryClient({
