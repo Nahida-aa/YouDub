@@ -9,7 +9,9 @@ import {
 } from 'drizzle-orm/sqlite-core';
 
 export const tasks = sqliteTable('tasks', {
-	id: text().primaryKey(),
+	id: text()
+		.primaryKey()
+		.$defaultFn(() => timeId({ size: 11 })),
 	url: text().notNull(),
 	title: text(),
 	status: text().notNull(),

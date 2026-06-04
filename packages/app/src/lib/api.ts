@@ -116,24 +116,24 @@ export function getTaskLog(id: string): Promise<string> {
 	return request(`/api/tasks/${id}/log`);
 }
 
-export function rerunTask(id: string): Promise<Task> {
-	return request(`/api/tasks/${id}/rerun`, { method: 'POST' });
-}
+// export function rerunTask(id: string): Promise<Task> {
+// 	return request(`/api/tasks/${id}/rerun`, { method: 'POST' });
+// }
 
-export function resumeTask(id: string): Promise<Task> {
-	return request(`/api/tasks/${id}/resume`, { method: 'POST' });
-}
+// export function resumeTask(id: string): Promise<Task> {
+// 	return request(`/api/tasks/${id}/resume`, { method: 'POST' });
+// }
 
-export function rerunStage(
-	id: string,
-	stage: string,
-	cascade = false,
-): Promise<Task> {
-	return request(`/api/tasks/${id}/rerun-stage`, {
-		method: 'POST',
-		body: JSON.stringify({ stage, cascade }),
-	});
-}
+// export function rerunStage(
+// 	id: string,
+// 	stage: string,
+// 	cascade = false,
+// ): Promise<Task> {
+// 	return request(`/api/tasks/${id}/rerun-stage`, {
+// 		method: 'POST',
+// 		body: JSON.stringify({ stage, cascade }),
+// 	});
+// }
 
 export function uploadLocalTask(
 	file: File,

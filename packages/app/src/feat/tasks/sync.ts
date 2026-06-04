@@ -58,3 +58,27 @@ export const createTask = async (url: string) => {
 	}
 	return ret.data;
 };
+
+export const resumeTask = async (id: string) => {
+	const ret = await socket.emitWithAck('resumeTask', id);
+	if (ret.ok === false) {
+		throw new Error(ret.error.msg);
+	}
+	return ret.data;
+};
+
+export const rerunStage = async (taskId: string, stageName: string, cascade = false) => {
+	const ret = await socket.emitWithAck('rerunStage', { taskId, stageName, cascade });
+	if (ret.ok === false) {
+		throw new Error(ret.error.msg);
+	}
+	return ret.data;
+};
+
+export const rerunTask = async (id: string) => {
+	const ret = await socket.emitWithAck('rerunTask', id);
+	if (ret.ok === false) {
+		throw new Error(ret.error.msg);
+	}
+	return ret.data;
+};

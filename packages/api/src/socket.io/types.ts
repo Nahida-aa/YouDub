@@ -31,12 +31,21 @@ export interface ClientToServerEvents extends CollectClientToServerEvents {
 	) => void;
 	'test:event': (data: { timestamp: number }) => void;
 	'ml:voxcpm:check': () => void;
-	subscribe: (data: { topic: string }) => void;
-	unsubscribe: (data: { topic: string }) => void;
+	subscribe: (data: { topic: string; id?: string }) => void;
+	unsubscribe: (data: { topic: string; id?: string }) => void;
 	createTask: (
 		url: string,
 		callback: (res: Ret<{ id: string }>) => void,
 	) => void;
+	resumeTask: (
+		id: string,
+		callback: (res: Ret<{ id: string }>) => void,
+	) => void;
+	rerunStage: (
+		input: { taskId: string; stageName: string; cascade?: boolean },
+		callback: (res: Ret<{ id: string }>) => void,
+	) => void;
+	rerunTask: (id: string, callback: (res: Ret<{ id: string }>) => void) => void;
 }
 
 export interface ServerToClientEvents extends CollectServerToClientEvents {
@@ -52,6 +61,7 @@ export interface ServerToClientEvents extends CollectServerToClientEvents {
 	'broadcast:event': (data: { message: string }) => void;
 	'ml:voxcpm:status': (status: ModelStatus) => void;
 	'ml:voxcpm:progress': (data: { message: string; percent: number }) => void;
+	task_log: (data: { taskId: string; line: string }) => void;
 }
 
 export interface InterServerEvents {

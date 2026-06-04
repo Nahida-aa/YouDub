@@ -1,0 +1,8 @@
+{
+  "name": "@repo/cli",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@repo/api": "workspace:*"
+  }
+}

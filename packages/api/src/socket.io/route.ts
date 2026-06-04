@@ -1,12 +1,15 @@
 import { aq } from 'agnostic-query';
 import { toDb0 } from 'agnostic-query/db0/sqlite.js';
 // import { toDrizzle } from 'agnostic-query/drizzle/sqlite';
+import { and, sql as drizzleSql, eq } from 'drizzle-orm';
 import { db, sql } from '#/db/index';
 import {
 	get_youtube_cookie,
 	save_youtube_cookie,
 } from '#/feat/settings/cookie.ts';
-import { createTask, findTaskByVideoId } from '#/feat/tasks/fn.ts';
+import { createTask, findTaskByVideoId, nowISO } from '#/feat/tasks/fn.ts';
+import { STAGE_NAMES, STAGES } from '#/feat/tasks/stages.ts';
+import { taskStages, tasks } from '#/feat/tasks/table.ts';
 import { extractVideoId } from '#/feat/tasks/validate.ts';
 import { enqueue } from '#/feat/tasks/worker.ts';
 import type {
@@ -159,6 +162,199 @@ io.on('connection', async (socket) => {
 		}),
 	);
 
+	// ── Task lifecycle: rerun/resume/rerunStage ──
+
+	socket.on(
+		'rerunTask',
+		errorHandler(async (taskId: string) => {
+			const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId));
+			if (!task) throw new Error(`Task ${taskId} not found`);
+
+			for (const stage of STAGES) {
+				await db
+					.update(taskStages)
+					.set({
+						status: 'pending',
+						started_at: null,
+						completed_at: null,
+						error_message: null,
+						last_message: null,
+						progress: null,
+					})
+					.where(
+						and(
+							eq(taskStages.task_id, taskId),
+							eq(taskStages.name, stage.name),
+						),
+					);
+			}
+			await db
+				.update(tasks)
+				.set({
+					status: 'queued',
+					current_stage: STAGES[0].name,
+					error_message: null,
+					started_at: null,
+					completed_at: null,
+				})
+				.where(eq(tasks.id, taskId));
+
+			io.emit('transaction', {
+				id: 'tasks',
+				transactionId: crypto.randomUUID(),
+				mutations: [
+					{
+						type: 'update',
+						id: taskId,
+						data: {
+							status: 'queued',
+							current_stage: STAGES[0].name,
+							error_message: null,
+							started_at: null,
+							completed_at: null,
+						},
+					},
+				],
+			});
+			enqueue(taskId);
+			return { id: taskId };
+		}),
+	);
+
+	socket.on(
+		'resumeTask',
+		errorHandler(async (taskId: string) => {
+			const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId));
+			if (!task) throw new Error(`Task ${taskId} not found`);
+
+			const stages = await db
+				.select()
+				.from(taskStages)
+				.where(eq(taskStages.task_id, taskId));
+			stages.sort(
+				(a, b) => STAGE_NAMES.indexOf(a.name) - STAGE_NAMES.indexOf(b.name),
+			);
+			const resumeFrom = stages.findIndex((s) => s.status !== 'succeeded');
+			if (resumeFrom === -1) return { id: taskId }; // already completed
+
+			const resumeStage = stages[resumeFrom];
+			for (let i = resumeFrom; i < stages.length; i++) {
+				await db
+					.update(taskStages)
+					.set({
+						status: 'pending',
+						started_at: null,
+						completed_at: null,
+						error_message: null,
+						last_message: null,
+						progress: null,
+					})
+					.where(
+						and(
+							eq(taskStages.task_id, taskId),
+							eq(taskStages.name, stages[i].name),
+						),
+					);
+			}
+			await db
+				.update(tasks)
+				.set({
+					status: 'queued',
+					current_stage: resumeStage.name,
+					error_message: null,
+				})
+				.where(eq(tasks.id, taskId));
+
+			io.emit('transaction', {
+				id: 'tasks',
+				transactionId: crypto.randomUUID(),
+				mutations: [
+					{
+						type: 'update',
+						id: taskId,
+						data: {
+							status: 'queued',
+							current_stage: resumeStage.name,
+							error_message: null,
+						},
+					},
+				],
+			});
+			enqueue(taskId);
+			return { id: taskId };
+		}),
+	);
+
+	socket.on(
+		'rerunStage',
+		errorHandler(
+			async (input: {
+				taskId: string;
+				stageName: string;
+				cascade?: boolean;
+			}) => {
+				const [task] = await db
+					.select()
+					.from(tasks)
+					.where(eq(tasks.id, input.taskId));
+				if (!task) throw new Error(`Task ${input.taskId} not found`);
+
+				const stageIdx = STAGES.findIndex((s) => s.name === input.stageName);
+				if (stageIdx === -1)
+					throw new Error(`Stage ${input.stageName} not found`);
+
+				const stagesToReset = input.cascade
+					? STAGES.slice(stageIdx)
+					: [STAGES[stageIdx]];
+
+				for (const stage of stagesToReset) {
+					await db
+						.update(taskStages)
+						.set({
+							status: 'pending',
+							started_at: null,
+							completed_at: null,
+							error_message: null,
+							last_message: null,
+							progress: null,
+						})
+						.where(
+							and(
+								eq(taskStages.task_id, input.taskId),
+								eq(taskStages.name, stage.name),
+							),
+						);
+				}
+				await db
+					.update(tasks)
+					.set({
+						status: 'queued',
+						current_stage: STAGES[stageIdx].name,
+						error_message: null,
+					})
+					.where(eq(tasks.id, input.taskId));
+
+				io.emit('transaction', {
+					id: 'tasks',
+					transactionId: crypto.randomUUID(),
+					mutations: [
+						{
+							type: 'update',
+							id: input.taskId,
+							data: {
+								status: 'queued',
+								current_stage: STAGES[stageIdx].name,
+								error_message: null,
+							},
+						},
+					],
+				});
+				enqueue(input.taskId);
+				return { id: input.taskId };
+			},
+		),
+	);
+
 	socket.on('sync', async ({ id }) => {
 		try {
 			assertCollection(id);
@@ -200,6 +396,18 @@ io.on('connection', async (socket) => {
 	});
 	socket.on('unloadSubset', (payload) => {
 		console.log('[unloadSubset]', payload.table, payload);
+	});
+
+	socket.on('subscribe', (payload: { topic: string; id?: string }) => {
+		if (payload.topic === 'tasks:log' && payload.id) {
+			socket.join(payload.id);
+		}
+	});
+
+	socket.on('unsubscribe', (payload: { topic: string; id?: string }) => {
+		if (payload.topic === 'tasks:log' && payload.id) {
+			socket.leave(payload.id);
+		}
 	});
 
 	socket.on('disconnect', (reason) => {

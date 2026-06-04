@@ -1,4 +1,4 @@
-import { mkdirSync, existsSync, readFileSync, writeFileSync, statSync } from 'node:fs';
+import { appendFileSync, mkdirSync, existsSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { db } from '#/db/index.ts';
@@ -6,7 +6,8 @@ import { eq, sql } from 'drizzle-orm';
 import { io } from '#/socket.io/io.ts';
 import { tasks, taskStages } from '#/feat/tasks/table.ts';
 import { STAGES } from '#/feat/tasks/stages.ts';
-import { SESSION_DIR, openaiDefaults } from '#/config/config.ts';
+import { extractVideoId } from '#/feat/tasks/validate.ts';
+import { LOG_DIR, SESSION_DIR, WORKFOLDER, openaiDefaults } from '#/config/config.ts';
 import { Demucs } from '#/ml/demucs/demucs.ts';
 import { transcribe as whisperTranscribe } from '#/ml/whisper/whisper.ts';
 import { VoxCPM } from '#/ml/voxcpm/voxcpm.ts';
@@ -47,6 +48,14 @@ function srtTime(ms: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')},${String(ml).padStart(3, '0')}`;
 }
 
+function emitLog(taskId: string, line: string) {
+  console.log(line);
+  const ts = nowISO();
+  const logPath = join(LOG_DIR, `${taskId}.log`);
+  appendFileSync(logPath, `[${ts}] ${line}\n`);
+  io.to(taskId).emit('task_log', { taskId, line });
+}
+
 function ffmpeg(args: string[], timeout = 120_000) {
   const r = spawnSync('ffmpeg', ['-y', ...args], { stdio: ['pipe', 'pipe', 'pipe'], timeout });
   if (r.error) throw new Error(`ffmpeg: ${r.error.message}`);
@@ -55,14 +64,63 @@ function ffmpeg(args: string[], timeout = 120_000) {
 
 // ── Stage 1: download ──
 async function stageDownload(taskId: string, sessionPath: string, url: string) {
-  await updateStageDB(taskId, 'download', { last_message: 'Downloading video...', progress: 0 });
-
   const mediaDir = join(sessionPath, 'media');
-  mkdirSync(mediaDir, { recursive: true });
+  const videoPath = join(mediaDir, 'video_source.mp4');
 
+  // If video already exists on disk, skip download entirely
+  if (existsSync(videoPath)) {
+    await updateStageDB(taskId, 'download', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Already on disk' });
+    return;
+  }
+
+  // Local upload URL (local://upload/<uploadTaskId>?direction=...&filename=...)
+  if (url.startsWith('local://')) {
+    await updateStageDB(taskId, 'download', { last_message: 'Importing local video...', progress: 0 });
+    mkdirSync(mediaDir, { recursive: true });
+    mkdirSync(join(sessionPath, 'metadata'), { recursive: true });
+
+    const parsed = new URL(url);
+    const uploadTaskId = parsed.pathname.replace(/^\/+/, '').split('/')[0];
+    const direction = parsed.searchParams.get('direction') || 'en-zh';
+    const filename = parsed.searchParams.get('filename') || 'video.mp4';
+
+    const uploadDir = join(WORKFOLDER, '_uploads', uploadTaskId);
+    const sourceFile = join(uploadDir, filename);
+    if (!existsSync(sourceFile)) throw new Error(`Local upload file not found: ${sourceFile}`);
+
+    // Transcode to MP4 via ffmpeg
+    ffmpeg(['-i', sourceFile, '-map', '0:v:0', '-map', '0:a:0?',
+      '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+      '-c:a', 'aac', '-movflags', '+faststart', videoPath]);
+
+    if (!existsSync(videoPath)) throw new Error('ffmpeg did not produce video_source.mp4');
+
+    const [srcLang, tgtLang] = direction.split('-');
+    writeFileSync(join(sessionPath, 'metadata', 'local_info.json'), JSON.stringify({
+      id: uploadTaskId,
+      title: filename.replace(/\.\w+$/, ''),
+      source: 'local',
+      webpage_url: url,
+      original_path: sourceFile,
+      asr_language: srcLang,
+      target_language: tgtLang,
+    }, null, 2));
+
+    await updateStageDB(taskId, 'download', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Imported' });
+    return;
+  }
+
+  // YouTube/Bilibili URL — download via yt-dlp
+  let isDownloadable = false;
+  try { isDownloadable = !!extractVideoId(url); } catch { /* not a yt/bili url */ }
+  if (!isDownloadable) {
+    throw new Error(`Cannot download: unsupported URL "${url}". Use a YouTube/Bilibili URL or upload a local file.`);
+  }
+
+  await updateStageDB(taskId, 'download', { last_message: 'Downloading video...', progress: 0 });
+  mkdirSync(mediaDir, { recursive: true });
   mkdirSync(join(sessionPath, 'metadata'), { recursive: true });
 
-  // Download video
   const r = spawnSync('yt-dlp', [
     '-f', 'bestaudio[ext=m4a]+bestvideo[ext=mp4]/best[ext=mp4]/best',
     '--merge-output-format', 'mp4',
@@ -74,7 +132,6 @@ async function stageDownload(taskId: string, sessionPath: string, url: string) {
   if (dlErr) throw new Error(`yt-dlp: ${dlErr.message}`);
   if (r.status !== 0) throw new Error(`yt-dlp exit ${r.status}: ${r.stderr.toString().slice(0, 200)}`);
 
-  const videoPath = join(mediaDir, 'video_source.mp4');
   if (!existsSync(videoPath)) throw new Error('yt-dlp did not produce video_source.mp4');
 
   // Write info JSON separately
@@ -85,7 +142,7 @@ async function stageDownload(taskId: string, sessionPath: string, url: string) {
     }
   } catch { /* metadata is optional */ }
 
-  await updateStageDB(taskId, 'download', { status: 'completed', completed_at: nowISO(), progress: 100, last_message: 'Downloaded' });
+  await updateStageDB(taskId, 'download', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Downloaded' });
 }
 
 // ── Stage 2: separate (Demucs) ──
@@ -115,7 +172,7 @@ async function stageSeparate(taskId: string, sessionPath: string) {
   }
   demucs.writeWav(bgm, stems.sampleRate, join(mediaDir, 'audio_bgm.wav'));
 
-  await updateStageDB(taskId, 'separate', { status: 'completed', completed_at: nowISO(), progress: 100, last_message: 'Separated' });
+  await updateStageDB(taskId, 'separate', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Separated' });
 }
 
 // ── Stage 3: asr (Whisper) ──
@@ -145,7 +202,7 @@ async function stageAsr(taskId: string, sessionPath: string) {
   };
 
   writeFileSync(join(metadataDir, 'asr.json'), JSON.stringify(asrData, null, 2));
-  await updateStageDB(taskId, 'asr', { status: 'completed', completed_at: nowISO(), progress: 100, last_message: 'Transcribed' });
+  await updateStageDB(taskId, 'asr', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Transcribed' });
 }
 
 // ── Stage 4: asr_fix ──
@@ -213,7 +270,7 @@ async function stageAsrFix(taskId: string, sessionPath: string) {
     result: { text: data.result.text || '', utterances: padded },
   }, null, 2));
 
-  await updateStageDB(taskId, 'asr_fix', { status: 'completed', completed_at: nowISO(), progress: 100, last_message: 'Fixed' });
+  await updateStageDB(taskId, 'asr_fix', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Fixed' });
 }
 
 // ── Stage 5: translate ──
@@ -298,7 +355,7 @@ ${fullText.slice(0, 10000)}`;
     hotwords = (pre.hotwords || []).map((h: any) => `${h.src} -> ${h.dst}`);
     corrections = (pre.corrections || []).map((c: any) => `${c.wrong} -> ${c.correct}`);
   } catch (e: any) {
-    console.warn('[Translate] Preprocess failed, continuing with empty:', e.message);
+    emitLog(taskId, `[WARN] [Translate] Preprocess failed: ${e.message}`);
   }
 
   const hotwordsStr = hotwords.length ? hotwords.join('\n') : '(none)';
@@ -357,7 +414,7 @@ ${correctionsStr}
   }));
 
   writeFileSync(translationFile, JSON.stringify({ translation }, null, 2));
-  await updateStageDB(taskId, 'translate', { status: 'completed', completed_at: nowISO(), progress: 100, last_message: 'Translated' });
+  await updateStageDB(taskId, 'translate', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Translated' });
 }
 
 // ── Stage 6: split_audio ──
@@ -393,7 +450,7 @@ async function stageSplitAudio(taskId: string, sessionPath: string) {
     ffmpeg(['-i', vocalsFile, '-ss', String(start / 1000), '-to', String(end / 1000), '-c', 'copy', outPath]);
   }
 
-  await updateStageDB(taskId, 'split_audio', { status: 'completed', completed_at: nowISO(), progress: 100, last_message: 'Split' });
+  await updateStageDB(taskId, 'split_audio', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Split' });
 }
 
 // ── Stage 7: tts (VoxCPM) ──
@@ -440,7 +497,7 @@ async function stageTts(taskId: string, sessionPath: string) {
       refWav = fallbackRef;
     }
     if (!refWav || !existsSync(refWav)) {
-      console.warn(`[TTS] No reference for segment ${idx}, skipping`);
+      emitLog(taskId, `[WARN] [TTS] No reference for segment ${idx}, skipping`);
       writeFileSync(outPath, Buffer.alloc(44));
       continue;
     }
@@ -451,7 +508,7 @@ async function stageTts(taskId: string, sessionPath: string) {
     writeWav(audio, outPath, 48000);
   }
 
-  await updateStageDB(taskId, 'tts', { status: 'completed', completed_at: nowISO(), progress: 100, last_message: 'TTS done' });
+  await updateStageDB(taskId, 'tts', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'TTS done' });
 }
 
 function writeWav(samples: Float32Array, filePath: string, sampleRate: number) {
@@ -577,7 +634,7 @@ async function stageMergeAudio(taskId: string, sessionPath: string) {
   ffmpeg(['-f', 'concat', '-safe', '0', '-i', concatFile, '-acodec', 'pcm_s16le', '-ar', String(sampleRate), '-ac', '1', dubbingFile]);
 
   writeFileSync(timingsFile, JSON.stringify({ translation }, null, 2));
-  await updateStageDB(taskId, 'merge_audio', { status: 'completed', completed_at: nowISO(), progress: 100, last_message: 'Merged' });
+  await updateStageDB(taskId, 'merge_audio', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Merged' });
 }
 
 // ── Stage 9: merge_video ──
@@ -725,7 +782,7 @@ async function stageMergeVideo(taskId: string, sessionPath: string) {
     '-c:a', 'aac', '-movflags', '+faststart', '-shortest',
     finalVideo], 300_000);
 
-  await updateStageDB(taskId, 'merge_video', { status: 'completed', completed_at: nowISO(), progress: 100, last_message: 'Merged' });
+  await updateStageDB(taskId, 'merge_video', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Merged' });
 
   // Update task with final path
   const finalPath = `/api/video/${taskId}`;
@@ -758,7 +815,7 @@ export async function runPipeline(taskId: string) {
   for (const stage of STAGES) {
     const handler = STAGE_HANDLERS[stage.name];
     if (!handler) {
-      console.warn(`[Pipeline] No handler for stage ${stage.name}, skipping`);
+      emitLog(taskId, `[WARN] [Pipeline] No handler for stage ${stage.name}, skipping`);
       continue;
     }
 
@@ -769,13 +826,13 @@ export async function runPipeline(taskId: string) {
       await handler(taskId, sessionPath, task);
     } catch (err: any) {
       const msg = err.message ?? String(err);
-      console.error(`[Pipeline] Stage ${stage.name} failed:`, msg);
+      emitLog(taskId, `[ERROR] [Pipeline] Stage ${stage.name} failed: ${msg}`);
       await updateStageDB(taskId, stage.name, { status: 'failed', error_message: msg, completed_at: nowISO() });
       await updateTaskDB(taskId, { status: 'failed', error_message: msg });
       return;
     }
   }
 
-  await updateTaskDB(taskId, { status: 'completed', completed_at: nowISO(), current_stage: null });
-  console.log(`[Pipeline] Task ${taskId} completed`);
+  await updateTaskDB(taskId, { status: 'succeeded', completed_at: nowISO(), current_stage: null });
+  emitLog(taskId, `[Pipeline] Task ${taskId} completed`);
 }

@@ -65,20 +65,6 @@ const STAGE_ORDER_CASE = sql`CASE ${STAGES.map(
 	(s, i) => sql`WHEN ${taskStages.name} = ${s.name} THEN ${i + 1}`,
 )} ELSE 99 END`;
 
-export async function getTaskWithStages(taskId: string) {
-	const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId));
-
-	if (!task) return null;
-
-	const stages = await db
-		.select()
-		.from(taskStages)
-		.where(eq(taskStages.task_id, taskId))
-		.orderBy(STAGE_ORDER_CASE);
-
-	return { ...task, stages };
-}
-
 export async function updateTask(
 	taskId: string,
 	fields: Record<string, unknown>,

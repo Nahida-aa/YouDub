@@ -17,7 +17,6 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from '@repo/ui-solid/base/dialog';
-import { createQuery } from '@tanstack/solid-query';
 import {
 	createFileRoute,
 	Link,
@@ -37,15 +36,19 @@ import {
 	Trash2,
 	XCircle,
 } from 'lucide-solid';
-import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
-import type { TaskStage } from '../lib/api';
 import {
-	finalVideoDownloadUrl,
-	finalVideoUrl,
-	getTaskLog,
-	rerunStage,
-	resumeTask,
-} from '../lib/api';
+	createEffect,
+	createMemo,
+	createSignal,
+	For,
+	onCleanup,
+	onMount,
+	Show,
+} from 'solid-js';
+import { socket } from '#/components/socket/ws.ts';
+import { rerunStage, resumeTask } from '#/feat/tasks/sync.ts';
+import type { TaskStage } from '../lib/api';
+import { finalVideoDownloadUrl, finalVideoUrl, getTaskLog } from '../lib/api';
 
 export const Route = createFileRoute('/tasks/$id')({
 	component: TaskDetail,
@@ -85,7 +88,7 @@ function stageBadgeClass(status?: string): string {
 		case 'failed':
 			return 'bg-red-500/10 text-red-600 border-red-200';
 		case 'running':
-			return 'bg-blue-500/10 text-blue-600 border-blue-200';
+			return css('bg-blue-500/10 text-blue-600 border-blue-200');
 		case 'queued':
 			return 'bg-amber-500/10 text-amber-600 border-amber-200';
 		default:
@@ -154,6 +157,7 @@ const STAGE_ORDER = [
 ];
 
 import { m } from '@repo/shared/i18n/paraglide/messages';
+import { css } from '@repo/shared/lib/utils';
 import { useLiveQuery } from '@tanstack/solid-db';
 import {
 	stagesQByTaskId,
@@ -167,19 +171,32 @@ function TaskDetail() {
 
 	const task = useLiveQuery((q) => tasksQById(id())(q));
 	const stages = useLiveQuery((q) => stagesQByTaskId(id())(q));
-	const logQuery = createQuery(() => ({
-		queryKey: ['taskLog', id()],
-		queryFn: async () => {
-			try {
-				return (await getTaskLog(id())) || '';
-			} catch {
-				console.log('Failed to fetch log for task', id());
-				return ''; // Ignore log fetch errors
+	const [logLines, setLogLines] = createSignal<string[]>([]);
+
+	onMount(async () => {
+		// Fetch history via REST, then receive incremental lines via socket
+		try {
+			const history = await getTaskLog(id());
+			if (history) {
+				setLogLines(history.split('\n').filter(Boolean));
 			}
-		},
-		// refetchInterval: 2000,
-	}));
-	const log = () => logQuery.data || '';
+		} catch {
+			/* ignore, start with empty */
+		}
+
+		socket.emit('subscribe', { topic: 'tasks:log', id: id() });
+		socket.on('task_log', handleTaskLog);
+		onCleanup(() => {
+			socket.off('task_log', handleTaskLog);
+			socket.emit('unsubscribe', { topic: 'tasks:log', id: id() });
+		});
+	});
+
+	function handleTaskLog(data: { taskId: string; line: string }) {
+		if (data.taskId === id()) {
+			setLogLines((prev) => [...prev, data.line]);
+		}
+	}
 
 	const [deleting, setDeleting] = createSignal(false);
 	const [resuming, setResuming] = createSignal(false);
@@ -243,7 +260,6 @@ function TaskDetail() {
 	const isCompleted = () => task()?.status === 'succeeded';
 	const canRerunStage = (status?: string) =>
 		status === 'succeeded' || status === 'failed';
-	const logLines = () => log().split('\n').filter(Boolean);
 
 	return (
 		<div class="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">

@@ -5,14 +5,11 @@ from pathlib import Path
 from typing import Callable
 
 from ..config import REPO_ROOT
-<<<<<<< HEAD
 from ..devices import resolve_device
 
 
 def _device() -> str:
     return resolve_device("demucs").selected
-=======
->>>>>>> aac7cc0 (aa)
 
 
 def _demucs_progress(info: dict, shifts: int) -> int:
