@@ -45,7 +45,7 @@ export class Demucs {
     const ep = this.options?.executionProvider ?? 'cpu';
     console.log(`[Demucs] Loading ONNX session (${ep})...`);
     this.session = await ort.InferenceSession.create(
-      `${this.modelDir}/htdemucs_fp16weights.onnx`,
+      `${this.modelDir}/htdemucs_ft_vocals.onnx`,
       { executionProviders: [ep] }
     );
     this.loaded = true;

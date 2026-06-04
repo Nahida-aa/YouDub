@@ -2,7 +2,24 @@
   "name": "@repo/cli",
   "private": true,
   "type": "module",
+  "scripts": {
+    "typecheck": "tsgo --noEmit",
+    "run": "bun run-task.ts"
+  },
   "dependencies": {
-    "@repo/api": "workspace:*"
+    "@huggingface/transformers": "^4.2.0",
+    "@repo/shared": "workspace:*",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.45.2",
+    "drizzle-zod": "^0.8.3",
+    "find-up": "^8.0.0",
+    "onnxruntime-node": "^1.26.0",
+    "openai": "^6.42.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "better-sqlite3": "^12.10.0",
+    "drizzle-kit": "^0.31.10"
   }
 }

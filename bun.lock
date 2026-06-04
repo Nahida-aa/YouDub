@@ -10,7 +10,6 @@
       },
       "devDependencies": {
         "@biomejs/biome": "2.4.16",
-        "openai": "^6.42.0",
       },
     },
     "apps/web": {
@@ -107,6 +106,25 @@
         "typescript": "~6",
         "vite": "^8.0.14",
         "vite-plugin-solid": "^2.11.0",
+      },
+    },
+    "packages/cli": {
+      "name": "@repo/cli",
+      "dependencies": {
+        "@huggingface/transformers": "^4.2.0",
+        "@repo/shared": "workspace:*",
+        "dotenv": "^17.4.2",
+        "drizzle-orm": "^0.45.2",
+        "drizzle-zod": "^0.8.3",
+        "find-up": "^8.0.0",
+        "onnxruntime-node": "^1.26.0",
+        "openai": "^6.42.0",
+        "zod": "^4.4.3",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "better-sqlite3": "^12.10.0",
+        "drizzle-kit": "^0.31.10",
       },
     },
     "packages/shared": {
@@ -559,6 +577,8 @@
     "@protobufjs/utf8": ["@protobufjs/utf8@1.1.1", "", {}, "sha512-oOAWABowe8EAbMyWKM0tYDKi8Yaox52D+HWZhAIJqQXbqe0xI/GV7FhLWqlEKreMkfDjshR5FKgi3mnle0h6Eg=="],
 
     "@repo/api": ["@repo/api@workspace:packages/api"],
+
+    "@repo/cli": ["@repo/cli@workspace:packages/cli"],
 
     "@repo/shared": ["@repo/shared@workspace:packages/shared"],
 
