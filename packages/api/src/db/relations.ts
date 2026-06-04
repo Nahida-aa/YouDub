@@ -3,7 +3,7 @@ import { taskStages, tasks } from './schema';
 
 export const taskStagesRelations = relations(taskStages, ({ one }) => ({
 	task: one(tasks, {
-		fields: [taskStages.taskId],
+		fields: [taskStages.task_id],
 		references: [tasks.id],
 	}),
 }));

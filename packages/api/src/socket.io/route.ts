@@ -1,18 +1,15 @@
+import { aq } from 'agnostic-query';
 import { toDb0 } from 'agnostic-query/db0/sqlite.js';
 // import { toDrizzle } from 'agnostic-query/drizzle/sqlite';
 import { db, sql } from '#/db/index';
 import { save_youtube_cookie } from '#/feat/settings/cookie.ts';
-import {
-	applyTransaction,
-	assertCollection,
-	listCollectionRows,
-} from '#/ws/collect.ts';
+import { createTask, findTaskByVideoId } from '#/feat/tasks/fn.ts';
+import { extractVideoId } from '#/feat/tasks/validate.ts';
+import { enqueue } from '#/feat/tasks/worker.ts';
+import { applyTransaction, assertCollection } from '#/ws/collect.ts';
+import { errorHandler } from '#/ws/errors.ts';
 import { getTableInfo, tableRegistry } from '#/ws/registry.ts';
-import {
-	type ClientToServerEvents,
-	errorHandler,
-	type ServerToClientEvents,
-} from '#/ws/types.ts';
+import type { ClientToServerEvents, ServerToClientEvents } from '#/ws/types.ts';
 import { downloadVoxCPM } from '../ml/voxcpm/download';
 import { checkVoxCPMStatus } from '../ml/voxcpm/load';
 import { engine, io } from './io.ts';
@@ -132,10 +129,36 @@ io.on('connection', async (socket) => {
 		}
 	});
 
-	socket.on('sync', ({ id }) => {
+	socket.on(
+		'createTask',
+		errorHandler(async (url: string) => {
+			const videoId = extractVideoId(url);
+
+			const existingId = await findTaskByVideoId(videoId);
+			if (existingId) {
+				return { id: existingId };
+			}
+
+			const [ret] = await createTask(url.trim(), videoId);
+			const id = ret.id;
+			enqueue(ret.id);
+
+			return { id };
+		}),
+	);
+
+	socket.on('sync', async ({ id }) => {
 		try {
 			assertCollection(id);
-			socket.emit('sync', listCollectionRows(id));
+			socket.emit(
+				'sync',
+				await toDb0(
+					sql,
+					aq({
+						table: id,
+					}).toJSON(),
+				),
+			);
 		} catch (error) {
 			console.error('[WS] Sync failed:', error);
 			socket.emit('sync', []);

@@ -8,7 +8,7 @@ import type { TableName } from '#/ws/registry.ts';
 export type TransactionMutation = {
 	type: 'insert' | 'update' | 'delete';
 	id?: string;
-	data?: unknown;
+	data?: Record<string, unknown>;
 };
 
 export type TransactionPayload = {
@@ -23,41 +23,6 @@ export type TransactionAck =
 			ok: false;
 			error: string;
 	  };
-
-type AckFn<I = undefined, T = undefined> = (input: I) => Promise<T> | T;
-
-const getErrorMessage = (error: unknown) =>
-	error instanceof Error
-		? error.message
-		: typeof error === 'string'
-			? error
-			: 'Unknown error';
-
-export const errorHandler = <I = undefined, T = undefined>(fn: AckFn<I, T>) => {
-	return async (input: I, result: (ret: Ret<T>) => void) => {
-		try {
-			const data = await fn(input);
-			result(data);
-		} catch (error) {
-			console.error('Error in WebSocket handler:', error);
-			if (error instanceof AppError) {
-				result(error.toJSON() as Ret<T>);
-			} else if (error instanceof z.ZodError) {
-				result(
-					newErr(
-						appErrCode.VALIDATION_ERROR,
-						error.message,
-						error.issues,
-					) as Ret<T>,
-				);
-			} else {
-				result(
-					newErr(appErrCode.INTERNAL_ERROR, getErrorMessage(error)) as Ret<T>,
-				);
-			}
-		}
-	};
-};
 
 export type LoadSubsetPayload = QuerySchema & {
 	table: TableName;
@@ -91,6 +56,10 @@ export interface ClientToServerEvents {
 	'ml:voxcpm:check': () => void;
 	subscribe: (data: { topic: string }) => void;
 	unsubscribe: (data: { topic: string }) => void;
+	createTask: (
+		url: string,
+		callback: (res: Ret<{ id: string }>) => void,
+	) => void;
 	loadSubset: (
 		payload: LoadSubsetPayload,
 		callback: (res: Ret<Array<Record<string, unknown>>>) => void,
@@ -111,7 +80,6 @@ export interface ServerToClientEvents {
 	'broadcast:event': (data: { message: string }) => void;
 	'ml:voxcpm:status': (status: ModelStatus) => void;
 	'ml:voxcpm:progress': (data: { message: string; percent: number }) => void;
-	// listTasks: (data: TaskSummary[]) => void;
 }
 
 export interface InterServerEvents {

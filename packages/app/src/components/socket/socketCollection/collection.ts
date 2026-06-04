@@ -67,6 +67,14 @@ type PendingEntry = {
 	timeout: ReturnType<typeof setTimeout>;
 };
 
+type TransactionPayload = {
+	transactionId?: string;
+	mutations?: {
+		type: 'insert' | 'update' | 'delete';
+		data: unknown;
+		id?: string;
+	}[];
+};
 type Entry = {
 	handlers: Set<Handler>;
 	pendingTransactions: Map<string, PendingEntry>;
@@ -77,17 +85,10 @@ type Entry = {
 	timeout?: ReturnType<typeof setTimeout>;
 	boundHandlers?: {
 		sync: (data: unknown[] | undefined) => void;
-		insert: (data: unknown) => void;
-		update: (data: unknown) => void;
-		delete: (data: unknown) => void;
-		transaction: (payload: {
-			transactionId?: string;
-			mutations?: Array<{
-				type: 'insert' | 'update' | 'delete';
-				data: unknown;
-				id?: string;
-			}>;
-		}) => void;
+		// insert: (data: unknown) => void;
+		// update: (data: unknown) => void;
+		// delete: (data: unknown) => void;
+		transaction: (payload: TransactionPayload) => void;
 		connect: () => void;
 		disconnect: () => void;
 	};
@@ -125,26 +126,7 @@ function bindSocket(socket: Socket, id: string, entry: Entry) {
 		emitToHandlers({ type: 'sync', data, id });
 	};
 
-	const onInsert = (data: unknown) => {
-		emitToHandlers({ type: 'insert', data, id });
-	};
-
-	const onUpdate = (data: unknown) => {
-		emitToHandlers({ type: 'update', data, id });
-	};
-
-	const onDelete = (data: unknown) => {
-		emitToHandlers({ type: 'delete', data, id });
-	};
-
-	const onTransaction = (payload: {
-		transactionId?: string;
-		mutations?: Array<{
-			type: 'insert' | 'update' | 'delete';
-			data: unknown;
-			id?: string;
-		}>;
-	}) => {
+	const onTransaction = (payload: TransactionPayload) => {
 		emitToHandlers({
 			type: 'transaction',
 			transactionId: payload.transactionId,
@@ -154,9 +136,6 @@ function bindSocket(socket: Socket, id: string, entry: Entry) {
 	};
 
 	socket.on('sync', onSync);
-	socket.on('insert', onInsert);
-	socket.on('update', onUpdate);
-	socket.on('delete', onDelete);
 	socket.on('transaction', onTransaction);
 
 	const onConnect = () => {
@@ -176,9 +155,6 @@ function bindSocket(socket: Socket, id: string, entry: Entry) {
 
 	entry.boundHandlers = {
 		sync: onSync,
-		insert: onInsert,
-		update: onUpdate,
-		delete: onDelete,
 		transaction: onTransaction,
 		connect: onConnect,
 		disconnect: onDisconnect,
@@ -192,9 +168,6 @@ function unbindSocket(socket: Socket, entry: Entry) {
 
 	if (entry.boundHandlers) {
 		socket.off('sync', entry.boundHandlers.sync);
-		socket.off('insert', entry.boundHandlers.insert);
-		socket.off('update', entry.boundHandlers.update);
-		socket.off('delete', entry.boundHandlers.delete);
 		socket.off('transaction', entry.boundHandlers.transaction);
 		socket.off('connect', entry.boundHandlers.connect);
 		socket.off('disconnect', entry.boundHandlers.disconnect);

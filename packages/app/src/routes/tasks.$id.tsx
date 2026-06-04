@@ -1,71 +1,110 @@
-import { createFileRoute, useParams, useNavigate, Link } from '@tanstack/solid-router';
-import { createSignal, createMemo, For, Show } from 'solid-js';
-import { createQuery } from '@tanstack/solid-query';
-import { ArrowLeft, Download, Play, RotateCcw, Trash2, AlertTriangle, CheckCircle2, Loader2, Clock, XCircle, Languages } from 'lucide-solid';
-import { Button } from '@repo/ui-solid/base/button';
 import { Badge } from '@repo/ui-solid/base/badge';
-import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from '@repo/ui-solid/base/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@repo/ui-solid/base/dialog';
+import { Button } from '@repo/ui-solid/base/button';
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardFooter,
+	CardHeader,
+	CardTitle,
+} from '@repo/ui-solid/base/card';
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from '@repo/ui-solid/base/dialog';
+import { createQuery } from '@tanstack/solid-query';
+import {
+	createFileRoute,
+	Link,
+	useNavigate,
+	useParams,
+} from '@tanstack/solid-router';
+import {
+	AlertTriangle,
+	ArrowLeft,
+	CheckCircle2,
+	Clock,
+	Download,
+	Languages,
+	Loader2,
+	Play,
+	RotateCcw,
+	Trash2,
+	XCircle,
+} from 'lucide-solid';
+import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import type { TaskStage } from '../lib/api';
-import { getTask, getTaskLog, deleteTask, resumeTask, rerunStage, finalVideoUrl, finalVideoDownloadUrl, getTaskDescription, translateTaskDescription } from '../lib/api';
+import {
+	deleteTask,
+	finalVideoDownloadUrl,
+	finalVideoUrl,
+	getTask,
+	getTaskDescription,
+	getTaskLog,
+	rerunStage,
+	resumeTask,
+	translateTaskDescription,
+} from '../lib/api';
 
 export const Route = createFileRoute('/tasks/$id')({
 	component: TaskDetail,
 });
-
-const STAGE_ORDER = ['download', 'separate', 'asr', 'asr_fix', 'translate', 'split_audio', 'tts', 'merge_audio', 'merge_video'];
-
-function stageLabel(name: string): string {
-	const map: Record<string, string> = {
-		download: '下载视频(yt-dlp)',
-		separate: '人声分离(demucs/htdemucs_ft)',
-		asr: '语音识别(whisper_asr.py/whisper/large-v3-turbo)',
-		asr_fix: '句子修正(asr_sentence_fixer.py/纯规则无模型)',
-		translate: '翻译字幕(openai_translate.py/openai兼容api,如gpt-4o-mini)',
-		split_audio: '切分音频(audio.py/librosa + pydub（DSP 无模型）)',
-		tts: '语音合成(tts, voxcp.py/OpenBMB,VoxCPM2)',
-		merge_audio: '合成音频(audio.py/librosa + audiostretchy（DSP 无模型）)',
-		merge_video: '合成视频(ffmpeg.py)',
-	};
-	return map[name] ?? name;
-}
-
-function stageIcon(status: string) {
+function stageIcon(status: string = 'queued') {
 	switch (status) {
-		case 'succeeded': return CheckCircle2;
-		case 'failed': return XCircle;
-		case 'running': return Loader2;
-		case 'queued': return Clock;
-		default: return Clock;
+		case 'succeeded':
+			return CheckCircle2;
+		case 'failed':
+			return XCircle;
+		case 'running':
+			return Loader2;
+		case 'queued':
+			return Clock;
+		default:
+			return Clock;
 	}
 }
 
-function stageIconClass(status: string): string {
+function stageIconClass(status?: string): string {
 	switch (status) {
-		case 'succeeded': return 'text-green-500';
-		case 'failed': return 'text-red-500';
-		case 'running': return 'text-blue-500 animate-spin';
-		default: return 'text-muted-foreground';
+		case 'succeeded':
+			return 'text-green-500';
+		case 'failed':
+			return 'text-red-500';
+		case 'running':
+			return 'text-blue-500 animate-spin';
+		default:
+			return 'text-muted-foreground';
 	}
 }
 
-function stageBadgeClass(status: string): string {
+function stageBadgeClass(status?: string): string {
 	switch (status) {
-		case 'succeeded': return 'bg-green-500/10 text-green-600 border-green-200';
-		case 'failed': return 'bg-red-500/10 text-red-600 border-red-200';
-		case 'running': return 'bg-blue-500/10 text-blue-600 border-blue-200';
-		case 'queued': return 'bg-amber-500/10 text-amber-600 border-amber-200';
-		default: return 'bg-muted text-muted-foreground';
+		case 'succeeded':
+			return 'bg-green-500/10 text-green-600 border-green-200';
+		case 'failed':
+			return 'bg-red-500/10 text-red-600 border-red-200';
+		case 'running':
+			return 'bg-blue-500/10 text-blue-600 border-blue-200';
+		case 'queued':
+			return 'bg-amber-500/10 text-amber-600 border-amber-200';
+		default:
+			return 'bg-muted text-muted-foreground';
 	}
 }
 
-function statusLabel(status: string): string {
+function statusLabel(status: string = 'unknown'): string {
 	const map: Record<string, string> = {
 		succeeded: '成功',
 		failed: '失败',
 		running: '运行中',
 		queued: '排队中',
 		pending: '等待中',
+		unknown: '未知状态',
 	};
 	return map[status] ?? status;
 }
@@ -92,43 +131,56 @@ function progressPercent(stages: TaskStage[]): number {
 	const completed = stages.filter((s) => s.status === 'succeeded').length;
 	return Math.round((completed / stages.length) * 100);
 }
+const stageLabel = (name: string): string => {
+	const map: Record<string, string> = {
+		download: '下载视频(yt-dlp)',
+		separate: '人声分离(demucs/htdemucs_ft)',
+		asr: '语音识别(whisper_asr.py/whisper/large-v3-turbo)',
+		asr_fix: '句子修正(asr_sentence_fixer.py/纯规则无模型)',
+		translate: '翻译字幕(openai_translate.py/openai兼容api,如gpt-4o-mini)',
+		split_audio: '切分音频(audio.py/librosa + pydub（DSP 无模型）)',
+		tts: '语音合成(tts, voxcp.py/OpenBMB,VoxCPM2)',
+		merge_audio: '合成音频(audio.py/librosa + audiostretchy（DSP 无模型）)',
+		merge_video: '合成视频(ffmpeg.py)',
+	};
+	return map[name] ?? name;
+};
+const STAGE_ORDER = [
+	'download',
+	'separate',
+	'asr',
+	'asr_fix',
+	'translate',
+	'split_audio',
+	'tts',
+	'merge_audio',
+	'merge_video',
+];
 
-import { m } from "@repo/shared/i18n/paraglide/messages";
+import { m } from '@repo/shared/i18n/paraglide/messages';
+import { useLiveQuery } from '@tanstack/solid-db';
+import { stagesQByTaskId, tasksQById } from '#/feat/tasks/sync.ts';
 
 function TaskDetail() {
-	const params = useParams({ from: '/tasks/$id' });
+	const id = Route.useParams({ select: (s) => s.id });
 	const navigate = useNavigate();
 
-	const taskQuery = createQuery(() => ({
-		queryKey: ['task', params().id],
-		queryFn: () => getTask(params().id),
-		// staleTime: 2000,
-		refetchInterval: 2000,
-	}));
-	const task = () => taskQuery.data;
-
+	const task = useLiveQuery((q) => tasksQById(id())(q));
+	const stages = useLiveQuery((q) => stagesQByTaskId(id())(q));
 	const logQuery = createQuery(() => ({
-		queryKey: ['taskLog', params().id],
+		queryKey: ['taskLog', id()],
 		queryFn: async () => {
 			try {
-				return await getTaskLog(params().id) || '';
+				return (await getTaskLog(id())) || '';
 			} catch {
-				console.log('Failed to fetch log for task', params().id);
+				console.log('Failed to fetch log for task', id());
 				return ''; // Ignore log fetch errors
 			}
 		},
-		refetchInterval: 2000,
+		// refetchInterval: 2000,
 	}));
 	const log = () => logQuery.data || '';
 
-	const descQuery = createQuery(() => ({
-		queryKey: ['taskDesc', params().id],
-		queryFn: () => getTaskDescription(params().id),
-		refetchInterval: 2000,
-	}));
-	const description = () => descQuery.data;
-
-	const error = () => (taskQuery.error as Error)?.message || '';
 	const [deleting, setDeleting] = createSignal(false);
 	const [resuming, setResuming] = createSignal(false);
 	const [stageRerunning, setStageRerunning] = createSignal<string | null>(null);
@@ -137,8 +189,7 @@ function TaskDetail() {
 	async function handleTranslateDesc() {
 		setTranslatingDesc(true);
 		try {
-			await translateTaskDescription(params().id);
-			taskQuery.refetch();
+			await translateTaskDescription(id());
 		} catch (err) {
 			alert(err instanceof Error ? err.message : '翻译简介失败');
 		} finally {
@@ -149,7 +200,7 @@ function TaskDetail() {
 	async function handleDelete() {
 		setDeleting(true);
 		try {
-			await deleteTask(params().id);
+			await deleteTask(id());
 			navigate({ to: '/' });
 		} catch (err) {
 			alert(err instanceof Error ? err.message : '删除失败');
@@ -161,8 +212,7 @@ function TaskDetail() {
 	async function handleResume() {
 		setResuming(true);
 		try {
-			await resumeTask(params().id);
-			taskQuery.refetch();
+			await resumeTask(id());
 		} catch (err) {
 			alert(err instanceof Error ? err.message : '恢复失败');
 		} finally {
@@ -173,8 +223,7 @@ function TaskDetail() {
 	async function handleRerunStage(stage: string) {
 		setStageRerunning(stage);
 		try {
-			await rerunStage(params().id, stage, false);
-			taskQuery.refetch();
+			await rerunStage(id(), stage, false);
 		} catch (err) {
 			alert(err instanceof Error ? err.message : '重跑失败');
 		} finally {
@@ -182,18 +231,29 @@ function TaskDetail() {
 		}
 	}
 
-	const stages = createMemo(() => {
-		const t = task();
-		if (!t?.stages) return [];
-		return [...t.stages].sort(
+	const sortedStages = createMemo(() =>
+		stages().sort(
 			(a, b) => STAGE_ORDER.indexOf(a.name) - STAGE_ORDER.indexOf(b.name),
-		);
+		),
+	);
+	const stagesMap = createMemo(() => {
+		const map = new Map<
+			string,
+			typeof stages extends () => (infer T)[] ? T : any
+		>();
+		for (const s of stages()) {
+			map.set(s.name, s);
+		}
+		return map;
+	});
+	createEffect(() => {
+		console.log('stages updated', stagesMap());
 	});
 
 	const isRunning = () => task()?.status === 'running';
 	const isFailed = () => task()?.status === 'failed';
 	const isCompleted = () => task()?.status === 'succeeded';
-	const canRerunStage = (status: string) =>
+	const canRerunStage = (status?: string) =>
 		status === 'succeeded' || status === 'failed';
 	const logLines = () => log().split('\n').filter(Boolean);
 
@@ -201,12 +261,17 @@ function TaskDetail() {
 		<div class="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
 			{/* Header */}
 			<div class="flex items-center gap-3">
-				<Link to="/" class="text-muted-foreground hover:text-foreground transition-colors">
+				<Link
+					to="/"
+					class="text-muted-foreground hover:text-foreground transition-colors"
+				>
 					<ArrowLeft class="size-5" />
 				</Link>
 				<div class="min-w-0 flex-1">
 					<h1 class="truncate text-lg font-semibold">
-						{task()?.title || task()?.url?.replace(/^https?:\/\/(www\.)?/, '') || '加载中...'}
+						{task()?.title ||
+							task()?.url?.replace(/^https?:\/\/(www\.)?/, '') ||
+							'加载中...'}
 					</h1>
 				</div>
 				<Show when={task()}>
@@ -216,27 +281,21 @@ function TaskDetail() {
 				</Show>
 			</div>
 
-			<Show when={error()}>
-				<div class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-					{error()}
-				</div>
-			</Show>
-
 			<Show when={task()}>
 				{/* Progress */}
-				<Card class=''>
+				<Card class="">
 					<CardContent class="pt-4">
 						<div class="flex items-center gap-3">
 							<div class="flex-1">
 								<div class="h-2 w-full overflow-hidden rounded-full bg-muted">
 									<div
 										class="h-full rounded-full bg-green-500 transition-all duration-500"
-										style={{ width: `${progressPercent(task()!.stages)}%` }}
+										style={{ width: `${progressPercent(sortedStages())}%` }}
 									/>
 								</div>
 							</div>
 							<span class="text-sm text-muted-foreground">
-								{progressPercent(task()!.stages)}%
+								{progressPercent(sortedStages())}%
 							</span>
 						</div>
 						<Show when={task()!.current_stage && isRunning()}>
@@ -267,20 +326,26 @@ function TaskDetail() {
 						</div>
 						<Show when={task()!.started_at}>
 							<div class="flex gap-2">
-								<span class="text-muted-foreground w-20 shrink-0">开始时间</span>
+								<span class="text-muted-foreground w-20 shrink-0">
+									开始时间
+								</span>
 								<span>{formatTime(task()!.started_at)}</span>
 							</div>
 						</Show>
 						<Show when={task()!.completed_at}>
 							<div class="flex gap-2">
-								<span class="text-muted-foreground w-20 shrink-0">完成时间</span>
+								<span class="text-muted-foreground w-20 shrink-0">
+									完成时间
+								</span>
 								<span>{formatTime(task()!.completed_at)}</span>
 							</div>
 						</Show>
 						<Show when={task()!.session_path}>
 							<div class="flex gap-2">
 								<span class="text-muted-foreground w-20 shrink-0">路径</span>
-								<span class="font-mono text-xs truncate">{task()!.session_path}</span>
+								<span class="font-mono text-xs truncate">
+									{task()!.session_path}
+								</span>
 							</div>
 						</Show>
 						<Show when={isFailed() && task()!.error_message}>
@@ -292,44 +357,26 @@ function TaskDetail() {
 					</CardContent>
 				</Card>
 
-				{/* Description */}
-				<Show when={description()?.src}>
-					<Card>
-						<CardHeader>
-							<CardTitle>视频简介</CardTitle>
-						</CardHeader>
-						<CardContent class="space-y-3 text-sm">
-							<div class="rounded-lg bg-muted/50 p-3">
-								<p class="mb-1 text-xs font-medium text-muted-foreground">原文</p>
-								<p class="whitespace-pre-wrap break-words">{description()!.src}</p>
-							</div>
-							<div class="rounded-lg bg-muted/50 p-3">
-								<p class="mb-1 text-xs font-medium text-muted-foreground">中文</p>
-								<p class="whitespace-pre-wrap break-words">{description()!.dst}</p>
-							</div>
-						</CardContent>
-					</Card>
-				</Show>
-
 				{/* Pipeline Stages */}
 				<Card>
 					<CardHeader>
 						<CardTitle>处理流程</CardTitle>
-						<CardDescription>
-							点击单个节点可单独重跑该步骤
-						</CardDescription>
+						<CardDescription>点击单个节点可单独重跑该步骤</CardDescription>
 					</CardHeader>
 					<CardContent class="px-0">
 						<ul class="flex flex-col">
-							<For each={stages()}>
-								{(stage, index) => {
-									const Icon = stageIcon(stage.status);
+							<For each={STAGE_ORDER}>
+								{(stageName, index) => {
+									const stage = () => stagesMap().get(stageName);
+									const Icon = stageIcon(stage()?.status);
 									return (
 										<li class="flex items-center gap-3 border-b border-border/60 px-4 py-3 last:border-b-0">
 											{/* Connector line */}
 											<div class="flex flex-col items-center">
 												<div class="flex h-8 w-8 items-center justify-center">
-													<Icon class={`size-4 ${stageIconClass(stage.status)}`} />
+													<Icon
+														class={`size-4 ${stageIconClass(stage()?.status)}`}
+													/>
 												</div>
 												<Show when={index() < stages().length - 1}>
 													<div class="h-full w-px bg-border" />
@@ -338,35 +385,45 @@ function TaskDetail() {
 											{/* Content */}
 											<div class="flex-1 min-w-0">
 												<div class="flex items-center gap-2">
-													<span class="text-xs text-muted-foreground">#{index() + 1}</span>
-													<span class="text-sm font-medium">{stageLabel(stage.name)}</span>
-													<Badge class={stageBadgeClass(stage.status)}>
-														{statusLabel(stage.status)}
+													<span class="text-xs text-muted-foreground">
+														#{index() + 1}
+													</span>
+													<span class="text-sm font-medium">
+														{stageLabel(stageName)}
+													</span>
+													<Badge class={stageBadgeClass(stage()?.status)}>
+														{statusLabel(stage()?.status)}
 													</Badge>
 												</div>
 												<div class="mt-0.5 flex items-center gap-3 text-xs text-muted-foreground">
-													<Show when={stage.started_at}>
-														<span>{formatTime(stage.started_at)}</span>
+													<Show when={stage()?.started_at}>
+														<span>{formatTime(stage()!.started_at)}</span>
+														<Show when={stage()?.completed_at}>
+															<span>
+																·{' '}
+																{formatDuration(
+																	stage()!.started_at,
+																	stage()!.completed_at,
+																)}
+															</span>
+														</Show>
 													</Show>
-													<Show when={stage.completed_at}>
-														<span>· {formatDuration(stage.started_at, stage.completed_at)}</span>
-													</Show>
-													<Show when={stage.last_message}>
-														<span>· {stage.last_message}</span>
+													<Show when={stage()?.last_message}>
+														<span>· {stage()!.last_message}</span>
 													</Show>
 												</div>
 											</div>
 											{/* Rerun button */}
-											<Show when={canRerunStage(stage.status)}>
+											<Show when={canRerunStage(stage()?.status)}>
 												<Button
 													variant="ghost"
 													size="icon-xs"
-													disabled={stageRerunning() === stage.name}
-													onClick={() => handleRerunStage(stage.name)}
+													disabled={stageRerunning() === stageName}
+													onClick={() => handleRerunStage(stageName)}
 													title="重跑此步骤"
 												>
 													<Show
-														when={stageRerunning() === stage.name}
+														when={stageRerunning() === stageName}
 														fallback={<RotateCcw class="size-3.5" />}
 													>
 														<Loader2 class="size-3.5 animate-spin" />
@@ -382,7 +439,7 @@ function TaskDetail() {
 				</Card>
 
 				{/* Video Player */}
-				<Show when={isCompleted() && task()!.final_video_path}>
+				<Show when={isCompleted() && task()?.final_video_path}>
 					<Card>
 						<CardHeader>
 							<CardTitle>最终视频</CardTitle>
@@ -391,15 +448,18 @@ function TaskDetail() {
 							<video
 								controls
 								class="w-full max-h-[70dvh] rounded-lg"
-								src={finalVideoUrl(params().id)}
+								src={finalVideoUrl(task()?.final_video_path!)}
 								preload="metadata"
 							>
+								<track kind="captions" />
 							</video>
-							 <p class="break-all text-xs text-muted-foreground">{task()?.final_video_path}</p>
+							<p class="break-all text-xs text-muted-foreground">
+								{task()?.final_video_path}
+							</p>
 						</CardContent>
 						<CardFooter class="flex gap-2">
 							<a
-								href={finalVideoDownloadUrl(params().id)}
+								href={finalVideoDownloadUrl(id())}
 								download={task()?.title || 'video'}
 							>
 								<Button variant="outline" size="sm">
@@ -426,15 +486,15 @@ function TaskDetail() {
 						<CardTitle>{m.task_runLog()}</CardTitle>
 					</CardHeader>
 					<CardContent class="px-0">
-							{logLines().length > 0 ? (
-				<pre class="max-h-96 overflow-auto px-4 text-xs leading-relaxed font-mono">
-								<For each={logLines()}>
-									{(line) => <div>{line}</div>}
-								</For>
+						{logLines().length > 0 ? (
+							<pre class="max-h-96 overflow-auto px-4 text-xs leading-relaxed font-mono">
+								<For each={logLines()}>{(line) => <div>{line}</div>}</For>
 							</pre>
-							): (<div class="px-4 py-8 text-center text-sm text-muted-foreground">
-									{m.task_emptyLog()}
-								</div>)}
+						) : (
+							<div class="px-4 py-8 text-center text-sm text-muted-foreground">
+								{m.task_emptyLog()}
+							</div>
+						)}
 					</CardContent>
 				</Card>
 
@@ -442,9 +502,7 @@ function TaskDetail() {
 				<Card>
 					<CardHeader>
 						<CardTitle class="text-red-600">危险操作</CardTitle>
-						<CardDescription>
-							这些操作不可撤销
-						</CardDescription>
+						<CardDescription>这些操作不可撤销</CardDescription>
 					</CardHeader>
 					<CardContent class="space-y-3">
 						{/* Resume */}
@@ -460,10 +518,7 @@ function TaskDetail() {
 									disabled={resuming()}
 									onClick={handleResume}
 								>
-									<Show
-										when={resuming()}
-										fallback={<Play class="size-3.5" />}
-									>
+									<Show when={resuming()} fallback={<Play class="size-3.5" />}>
 										<Loader2 class="size-3.5 animate-spin" />
 									</Show>
 									继续

@@ -1,6 +1,8 @@
 import { createFormHook } from '@tanstack/solid-form';
 import type { VariantProps } from 'class-variance-authority';
 import { createEffect, splitProps } from 'solid-js';
+import { SelectField, type SelectFieldProps } from './enum/SelectField';
+import { FileInputField, type FileInputFieldProps } from './file/fileInput';
 import {
 	Form,
 	FormFloatingSaveBar,
@@ -79,6 +81,42 @@ export const { useAppForm } = createFormHook({
 			);
 		},
 		PasswordField,
+		FileInputField: (props: Omit<FileInputFieldProps, 'fieldId'>) => {
+			const [local, others] = splitProps(props, ['invalid', 'errors']);
+			const field = useFieldContext<File | undefined>();
+			const invalid = () =>
+				!field().state.meta.isValid && field().state.meta.isTouched;
+			return (
+				<FileInputField
+					{...others}
+					name={field().name}
+					onValueChange={(f) => field().handleChange(f)}
+					invalid={invalid()}
+					errors={field().state.meta.errors}
+				/>
+			);
+		},
+		SelectField: (props: SelectFieldProps) => {
+			const [local, others] = splitProps(props, [
+				'invalid',
+				'errors',
+				'onChange',
+			]);
+			const field = useFieldContext<string | undefined>();
+			const invalid = () =>
+				!field().state.meta.isValid && field().state.meta.isTouched;
+			return (
+				<SelectField
+					{...others}
+					// options={others.options}
+					name={field().name}
+					value={others.options.find((o) => o.value === field().state.value)}
+					onChange={(o) => field().handleChange(o?.value)}
+					invalid={invalid()}
+					errors={field().state.meta.errors}
+				/>
+			);
+		},
 	},
 	formComponents: {
 		NextButton,

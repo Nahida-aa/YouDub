@@ -1,7 +1,7 @@
 import { Server as Engine } from '@socket.io/bun-engine';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import { db } from '#/db/index.ts';
-import { settings } from '#/feat/settings/table.ts';
+import type { settings } from '#/feat/settings/table.ts';
 import { tasks } from '#/feat/tasks/table.ts';
 import type { TransactionPayload } from '#/ws/types.ts';
 
@@ -41,29 +41,6 @@ export function assertCollection(id: string): asserts id is CollectionId {
 	}
 }
 
-export function listTasks(): TaskRow[] {
-	return db
-		.select()
-		.from(tasks)
-		.orderBy(desc(tasks.created_at), desc(tasks.id))
-		.all();
-}
-
-export function listSettings(): SettingsRow[] {
-	return db.select().from(settings).orderBy(desc(settings.updatedAt)).all();
-}
-
-export function listCollectionRows(
-	id: CollectionId,
-): TaskRow[] | SettingsRow[] {
-	switch (id) {
-		case 'tasks':
-			return listTasks();
-		case 'settings':
-			return listSettings();
-	}
-}
-
 function applyInsert(data: Record<string, unknown>) {
 	const row = toTaskInsert(data);
 	if (!row.id) {
@@ -89,6 +66,10 @@ function applyDelete(id: string) {
 	db.delete(tasks).where(eq(tasks.id, id));
 }
 
+const CONFLICT_SET = Object.fromEntries(
+	[...TASK_COLUMNS].filter((c) => c !== 'id').map((col) => [col, sql.raw(`excluded.${col}`)]),
+);
+
 export function applyTransaction(payload: TransactionPayload) {
 	assertCollection(payload.id);
 	db.transaction((tx) => {
@@ -98,14 +79,10 @@ export function applyTransaction(payload: TransactionPayload) {
 					throw new Error('Insert mutation requires row data');
 				}
 				tx.insert(tasks)
-					.values(
-						toTaskInsert(
-							mutation.data as Record<string, unknown>,
-						) as TaskInsert,
-					)
+					.values(toTaskInsert(mutation.data as Record<string, unknown>) as TaskInsert)
 					.onConflictDoUpdate({
 						target: tasks.id,
-						set: toTaskInsert(mutation.data as Record<string, unknown>),
+						set: CONFLICT_SET,
 					});
 				continue;
 			}
@@ -128,3 +105,4 @@ export function applyTransaction(payload: TransactionPayload) {
 		}
 	});
 }
+

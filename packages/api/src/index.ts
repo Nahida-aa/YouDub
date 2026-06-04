@@ -9,6 +9,7 @@ import app from './app';
 export default Bun.serve({
 	port: 9007,
 	idleTimeout: 60,
+
 	fetch(req: Request, server: any) {
 		if (req.url.includes('/ws/')) {
 			return io.fetch(req, server);

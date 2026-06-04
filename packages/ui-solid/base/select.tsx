@@ -5,7 +5,8 @@ import { cva } from 'class-variance-authority';
 import type { JSX, ValidComponent } from 'solid-js';
 import { splitProps } from 'solid-js';
 
-
+export type SelectProps<T extends { value: string; label: string }> =
+	SelectPrimitive.SelectRootProps<T>;
 const Select = SelectPrimitive.Root;
 const SelectValue = SelectPrimitive.Value;
 const SelectHiddenSelect = SelectPrimitive.HiddenSelect;

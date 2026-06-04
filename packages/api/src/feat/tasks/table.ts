@@ -1,3 +1,4 @@
+import { timeId } from '@repo/shared/db/timeId';
 import {
 	AnySQLiteColumn,
 	foreignKey,
@@ -24,21 +25,22 @@ export const tasks = sqliteTable('tasks', {
 export const taskStages = sqliteTable(
 	'task_stages',
 	{
-		taskId: text('task_id')
+		// id: text().$defaultFn(timeId).primaryKey(),
+		task_id: text('task_id')
 			.notNull()
 			.references(() => tasks.id, { onDelete: 'cascade' }),
 		name: text().notNull(),
 		label: text().notNull(),
 		status: text().notNull(),
-		startedAt: text('started_at'),
-		completedAt: text('completed_at'),
-		lastMessage: text('last_message'),
-		errorMessage: text('error_message'),
+		started_at: text('started_at'),
+		completed_at: text('completed_at'),
+		last_message: text('last_message'),
+		error_message: text('error_message'),
 		progress: integer(),
 	},
 	(table) => [
 		primaryKey({
-			columns: [table.taskId, table.name],
+			columns: [table.task_id, table.name],
 			name: 'task_stages_task_id_name_pk',
 		}),
 	],

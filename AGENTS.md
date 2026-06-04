@@ -6,10 +6,11 @@ AMD Radeon 780M (RDNA 3), ROCm 7.2.3 → `.agents/hardware.md`
 ## Model device assignment
 | 模型 | 设备 | 原因 |
 |------|------|------|
-| Demucs | CPU | GPU hang |
+| Demucs (PyTorch) | CPU | GPU hang |
+| Demucs (ONNX, onnxruntime-node) | CPU | **✅ 实际路径**，RTF ~1.0 单 CPU 即可实时 |
 | VoxCPM (PyTorch) | CPU | GPU segfault |
-| VoxCPM (vLLM-Omni) | GPU (ROCm) | 实验性，HIP ABI 不兼容 + GPU Hang |
-| VoxCPM (ORT+MIGraphX) | GPU (ROCm) | ✅ 可用，VAE Encoder/Decoder CPU fallback + MIGRAPHX_DISABLE_MIOPEN_FUSION=1 |
+| VoxCPM (onnxruntime-node WebGPU) | GPU (Vulkan/Dawn) | **✅ 主要路径**，VAE → CPU fallback（Dawn 多 session 资源泄漏 workaround），Prefill+Decode → WebGPU |
+| VoxCPM (ORT+MIGraphX) | GPU (ROCm) | ❌ 废弃，10x slower than CPU |
 | CosyVoice3 | CPU | 无 CUDA EP, 编译 ORT + MIGraphX 中（但 gfx1103 MIOpen conv solver hang 可能会堵） |
 | Whisper | GPU (cuda) | 正常 |
 | 翻译 | GPU (cuda) | 正常 |
@@ -35,3 +36,19 @@ AMD Radeon 780M (RDNA 3), ROCm 7.2.3 → `.agents/hardware.md`
 - `.agents/demucs.md` — Demucs CPU fallback 说明
 - `.agents/cosyvoice2.md` — CosyVoice2/3 ONNX 导出状态
 - `.agents/future-optimization.md` — 长期优化计划
+- `docs/webgpu-oom.md` — WebGPU `VK_ERROR_DEVICE_LOST` 根因分析
+
+## VoxCPM2 Benchmark (onnxruntime-node 1.26.0, Radeon 780M)
+
+```
+ts-onnx-webgpu-vulkan  RTF ~4.2  (VAE CPU + Prefill/Decode WebGPU)  ✅ 全文本
+ts-onnx-cpu            RTF ~7.4  (所有模型 CPU)                       ✅ 全文本
+py-pth-cpu             RTF ~9.9  (PyTorch CPU)                       ✅ 全文本
+rs-onnx-cpu            RTF ~10.2 (Rust ORT 1.24, short only)         ⏳ timeout
+```
+
+## 已知问题
+- **Dawn WebGPU 多 session 资源泄漏**：≥3 个 WebGPU InferenceSession 共存会导致 `VK_ERROR_DEVICE_LOST`。Workaround: VAE Encoder/Decoder 用 CPU EP，限制 WebGPU sessions ≤ 2 个。用完调用 `session.release()` 释放资源。
+  - 详情 → `docs/webgpu-oom.md`
+- MIGraphX 路径废弃（10x slower than CPU, MIOpen conv solver hang）
+- Rust `ort` crate v2.0.0-rc.12 bundles ORT 1.24（落后 2 个大版本），暂不适用于生产

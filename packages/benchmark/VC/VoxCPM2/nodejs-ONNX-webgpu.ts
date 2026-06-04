@@ -5,7 +5,7 @@ import { runBenchmark, RESULTS_DIR } from './bench-shared';
 async function main() {
   mkdirSync(RESULTS_DIR, { recursive: true });
   const results = await runBenchmark('webgpu');
-  const outPath = join(RESULTS_DIR, 'ts-webgpu.json');
+  const outPath = join(RESULTS_DIR, 'ts-onnx-webgpu-vulkan.json');
   writeFileSync(outPath, JSON.stringify(results, null, 2), 'utf-8');
   console.log(`\nSaved to ${outPath}`);
 }

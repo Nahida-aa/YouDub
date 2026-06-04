@@ -1,3 +1,3 @@
 @import 'tailwindcss';
-@import '@repo/ui-solid/styles.css';
+@import '../../ui-solid/styles.css';
 @plugin 'tailwindcss-animate';
