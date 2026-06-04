@@ -4,6 +4,7 @@ import { devtools } from '@tanstack/devtools-vite';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import { defineConfig } from 'vite';
 import solid from 'vite-plugin-solid';
+
 // bun add @inlang/paraglide-js  @tailwindcss/vite  @tanstack/devtools-vite @tanstack/router-plugin
 
 const host = process.env.TAURI_DEV_HOST;
@@ -33,7 +34,7 @@ export default defineConfig(async () => ({
 		host: host || false,
 		proxy: {
 			'/api': {
-				target: 'http://localhost:8000',
+				target: 'http://localhost:9007',
 				changeOrigin: true,
 			},
 		},

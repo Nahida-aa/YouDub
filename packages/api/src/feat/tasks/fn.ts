@@ -35,7 +35,7 @@ export async function createTask(url: string, taskId: string) {
 
 		await tx.insert(taskStages).values(
 			STAGES.map((stage) => ({
-				taskId,
+				task_id: taskId,
 				name: stage.name,
 				label: stage.label,
 				status: 'pending',
@@ -58,7 +58,7 @@ export async function getTaskWithStages(taskId: string) {
 	const stages = await db
 		.select()
 		.from(taskStages)
-		.where(eq(taskStages.taskId, taskId))
+		.where(eq(taskStages.task_id, taskId))
 		.orderBy(STAGE_ORDER_CASE);
 
 	return { ...task, stages };
@@ -82,7 +82,7 @@ export async function updateStage(
 		.update(taskStages)
 		.set(fields)
 		.where(
-			sql`${taskStages.taskId} = ${taskId} AND ${taskStages.name} = ${name}`,
+			sql`${taskStages.task_id} = ${taskId} AND ${taskStages.name} = ${name}`,
 		);
 }
 

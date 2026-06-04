@@ -7,9 +7,11 @@
     "dev": "bun run --hot src/index.ts",
     "db:pull": "drizzle-kit pull",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
+    "@hono/zod-validator": "^0.8.0",
     "@huggingface/transformers": "^4.2.0",
     "@repo/shared": "workspace:*",
     "@socket.io/bun-engine": "^0.1.1",

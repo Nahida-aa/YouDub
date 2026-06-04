@@ -6,15 +6,10 @@ export async function emitAck<T>(
 	payload: unknown,
 ): Promise<T> {
 	const res = await socket.emitWithAck(event, payload);
-	if (
-		typeof res === 'object' &&
-		res !== null &&
-		'ok' in res &&
-		res.ok === false
-	) {
+	if (res.ok === false) {
 		const err = new Error(res.error?.msg ?? 'Unknown error');
 		(err as any).code = res.error?.code;
 		throw err;
 	}
-	return res as T;
+	return res.data as T;
 }

@@ -191,8 +191,8 @@ export function translateTaskDescription(id: string): Promise<TaskDescription> {
 	return request(`/api/tasks/${id}/translate-description`, { method: 'POST' });
 }
 
-export function finalVideoUrl(id: string): string {
-	return `${API_BASE}/api/tasks/${id}/artifact/final-video`;
+export function finalVideoUrl(final_video_path: string): string {
+	return `${API_BASE}/api/finalVideoUrl?final_video_path=${encodeURIComponent(final_video_path)}`;
 }
 
 export function finalVideoDownloadUrl(id: string): string {

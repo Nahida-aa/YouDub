@@ -24,41 +24,6 @@ export type TransactionAck =
 			error: string;
 	  };
 
-type AckFn<I = undefined, T = undefined> = (input: I) => Promise<T> | T;
-
-const getErrorMessage = (error: unknown) =>
-	error instanceof Error
-		? error.message
-		: typeof error === 'string'
-			? error
-			: 'Unknown error';
-
-export const errorHandler = <I = undefined, T = undefined>(fn: AckFn<I, T>) => {
-	return async (input: I, result: (ret: Ret<T>) => void) => {
-		try {
-			const data = await fn(input);
-			result({ ok: true, data });
-		} catch (error) {
-			console.error('Error in WebSocket handler:', error);
-			if (error instanceof AppError) {
-				result(error.toJSON() as Ret<T>);
-			} else if (error instanceof z.ZodError) {
-				result(
-					newErr(
-						appErrCode.VALIDATION_ERROR,
-						error.message,
-						error.issues,
-					) as unknown as Ret<T>,
-				);
-			} else {
-				result(
-					newErr(appErrCode.INTERNAL_ERROR, getErrorMessage(error)) as Ret<T>,
-				);
-			}
-		}
-	};
-};
-
 export type LoadSubsetPayload = QuerySchema & {
 	table: TableName;
 };

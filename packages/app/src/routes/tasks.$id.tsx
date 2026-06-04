@@ -37,7 +37,7 @@ import {
 	Trash2,
 	XCircle,
 } from 'lucide-solid';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import type { TaskStage } from '../lib/api';
 import {
 	deleteTask,
@@ -54,35 +54,7 @@ import {
 export const Route = createFileRoute('/tasks/$id')({
 	component: TaskDetail,
 });
-
-const STAGE_ORDER = [
-	'download',
-	'separate',
-	'asr',
-	'asr_fix',
-	'translate',
-	'split_audio',
-	'tts',
-	'merge_audio',
-	'merge_video',
-];
-
-function stageLabel(name: string): string {
-	const map: Record<string, string> = {
-		download: '下载视频(yt-dlp)',
-		separate: '人声分离(demucs/htdemucs_ft)',
-		asr: '语音识别(whisper_asr.py/whisper/large-v3-turbo)',
-		asr_fix: '句子修正(asr_sentence_fixer.py/纯规则无模型)',
-		translate: '翻译字幕(openai_translate.py/openai兼容api,如gpt-4o-mini)',
-		split_audio: '切分音频(audio.py/librosa + pydub（DSP 无模型）)',
-		tts: '语音合成(tts, voxcp.py/OpenBMB,VoxCPM2)',
-		merge_audio: '合成音频(audio.py/librosa + audiostretchy（DSP 无模型）)',
-		merge_video: '合成视频(ffmpeg.py)',
-	};
-	return map[name] ?? name;
-}
-
-function stageIcon(status: string) {
+function stageIcon(status: string = 'queued') {
 	switch (status) {
 		case 'succeeded':
 			return CheckCircle2;
@@ -97,7 +69,7 @@ function stageIcon(status: string) {
 	}
 }
 
-function stageIconClass(status: string): string {
+function stageIconClass(status?: string): string {
 	switch (status) {
 		case 'succeeded':
 			return 'text-green-500';
@@ -110,7 +82,7 @@ function stageIconClass(status: string): string {
 	}
 }
 
-function stageBadgeClass(status: string): string {
+function stageBadgeClass(status?: string): string {
 	switch (status) {
 		case 'succeeded':
 			return 'bg-green-500/10 text-green-600 border-green-200';
@@ -125,13 +97,14 @@ function stageBadgeClass(status: string): string {
 	}
 }
 
-function statusLabel(status: string): string {
+function statusLabel(status: string = 'unknown'): string {
 	const map: Record<string, string> = {
 		succeeded: '成功',
 		failed: '失败',
 		running: '运行中',
 		queued: '排队中',
 		pending: '等待中',
+		unknown: '未知状态',
 	};
 	return map[status] ?? status;
 }
@@ -158,6 +131,31 @@ function progressPercent(stages: TaskStage[]): number {
 	const completed = stages.filter((s) => s.status === 'succeeded').length;
 	return Math.round((completed / stages.length) * 100);
 }
+const stageLabel = (name: string): string => {
+	const map: Record<string, string> = {
+		download: '下载视频(yt-dlp)',
+		separate: '人声分离(demucs/htdemucs_ft)',
+		asr: '语音识别(whisper_asr.py/whisper/large-v3-turbo)',
+		asr_fix: '句子修正(asr_sentence_fixer.py/纯规则无模型)',
+		translate: '翻译字幕(openai_translate.py/openai兼容api,如gpt-4o-mini)',
+		split_audio: '切分音频(audio.py/librosa + pydub（DSP 无模型）)',
+		tts: '语音合成(tts, voxcp.py/OpenBMB,VoxCPM2)',
+		merge_audio: '合成音频(audio.py/librosa + audiostretchy（DSP 无模型）)',
+		merge_video: '合成视频(ffmpeg.py)',
+	};
+	return map[name] ?? name;
+};
+const STAGE_ORDER = [
+	'download',
+	'separate',
+	'asr',
+	'asr_fix',
+	'translate',
+	'split_audio',
+	'tts',
+	'merge_audio',
+	'merge_video',
+];
 
 import { m } from '@repo/shared/i18n/paraglide/messages';
 import { useLiveQuery } from '@tanstack/solid-db';
@@ -179,7 +177,7 @@ function TaskDetail() {
 				return ''; // Ignore log fetch errors
 			}
 		},
-		refetchInterval: 2000,
+		// refetchInterval: 2000,
 	}));
 	const log = () => logQuery.data || '';
 
@@ -238,11 +236,24 @@ function TaskDetail() {
 			(a, b) => STAGE_ORDER.indexOf(a.name) - STAGE_ORDER.indexOf(b.name),
 		),
 	);
+	const stagesMap = createMemo(() => {
+		const map = new Map<
+			string,
+			typeof stages extends () => (infer T)[] ? T : any
+		>();
+		for (const s of stages()) {
+			map.set(s.name, s);
+		}
+		return map;
+	});
+	createEffect(() => {
+		console.log('stages updated', stagesMap());
+	});
 
 	const isRunning = () => task()?.status === 'running';
 	const isFailed = () => task()?.status === 'failed';
 	const isCompleted = () => task()?.status === 'succeeded';
-	const canRerunStage = (status: string) =>
+	const canRerunStage = (status?: string) =>
 		status === 'succeeded' || status === 'failed';
 	const logLines = () => log().split('\n').filter(Boolean);
 
@@ -354,16 +365,18 @@ function TaskDetail() {
 					</CardHeader>
 					<CardContent class="px-0">
 						<ul class="flex flex-col">
-							<For each={stages()}>
-								{(stage, index) => {
-									const Icon = stageIcon(stage.status);
+							<For each={STAGE_ORDER}>
+								{(stageName, index) => {
+									const stage = () => stagesMap().get(stageName);
+									console.log('Rendering stage', stageName, stage);
+									const Icon = stageIcon(stage()?.status);
 									return (
 										<li class="flex items-center gap-3 border-b border-border/60 px-4 py-3 last:border-b-0">
 											{/* Connector line */}
 											<div class="flex flex-col items-center">
 												<div class="flex h-8 w-8 items-center justify-center">
 													<Icon
-														class={`size-4 ${stageIconClass(stage.status)}`}
+														class={`size-4 ${stageIconClass(stage()?.status)}`}
 													/>
 												</div>
 												<Show when={index() < stages().length - 1}>
@@ -377,41 +390,41 @@ function TaskDetail() {
 														#{index() + 1}
 													</span>
 													<span class="text-sm font-medium">
-														{stageLabel(stage.name)}
+														{stageLabel(stageName)}
 													</span>
-													<Badge class={stageBadgeClass(stage.status)}>
-														{statusLabel(stage.status)}
+													<Badge class={stageBadgeClass(stage()?.status)}>
+														{statusLabel(stage()?.status)}
 													</Badge>
 												</div>
 												<div class="mt-0.5 flex items-center gap-3 text-xs text-muted-foreground">
-													<Show when={stage.started_at}>
-														<span>{formatTime(stage.started_at)}</span>
+													<Show when={stage()?.started_at}>
+														<span>{formatTime(stage()!.started_at)}</span>
+														<Show when={stage()?.completed_at}>
+															<span>
+																·{' '}
+																{formatDuration(
+																	stage()!.started_at,
+																	stage()!.completed_at,
+																)}
+															</span>
+														</Show>
 													</Show>
-													<Show when={stage.completed_at}>
-														<span>
-															·{' '}
-															{formatDuration(
-																stage.started_at,
-																stage.completed_at,
-															)}
-														</span>
-													</Show>
-													<Show when={stage.last_message}>
-														<span>· {stage.last_message}</span>
+													<Show when={stage()?.last_message}>
+														<span>· {stage()!.last_message}</span>
 													</Show>
 												</div>
 											</div>
 											{/* Rerun button */}
-											<Show when={canRerunStage(stage.status)}>
+											<Show when={canRerunStage(stage()?.status)}>
 												<Button
 													variant="ghost"
 													size="icon-xs"
-													disabled={stageRerunning() === stage.name}
-													onClick={() => handleRerunStage(stage.name)}
+													disabled={stageRerunning() === stageName}
+													onClick={() => handleRerunStage(stageName)}
 													title="重跑此步骤"
 												>
 													<Show
-														when={stageRerunning() === stage.name}
+														when={stageRerunning() === stageName}
 														fallback={<RotateCcw class="size-3.5" />}
 													>
 														<Loader2 class="size-3.5 animate-spin" />
@@ -427,7 +440,7 @@ function TaskDetail() {
 				</Card>
 
 				{/* Video Player */}
-				<Show when={isCompleted() && task()!.final_video_path}>
+				<Show when={isCompleted() && task()?.final_video_path}>
 					<Card>
 						<CardHeader>
 							<CardTitle>最终视频</CardTitle>
@@ -436,7 +449,7 @@ function TaskDetail() {
 							<video
 								controls
 								class="w-full max-h-[70dvh] rounded-lg"
-								src={finalVideoUrl(id())}
+								src={finalVideoUrl(task()?.final_video_path!)}
 								preload="metadata"
 							>
 								<track kind="captions" />

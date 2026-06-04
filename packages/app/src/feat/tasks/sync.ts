@@ -39,17 +39,9 @@ export const tasksQ = (q: InitialQueryBuilder) =>
 
 export const tasksQById = (id: string) => (q: InitialQueryBuilder) =>
 	tasksQ(q)
-		// .join({ stages: taskStagesCollect }, ({ stages, tasks }) =>
-		// 	eq(tasks.id, stages.taskId),
-		// )
+
 		.where(({ tasks }) => eq(tasks.id, id))
-		.select(({ tasks }) => ({
-			...tasks,
-			stages: q
-				.from({ stages: taskStagesCollect })
-				.where(({ stages }) => eq(stages.task_id, id))
-				.select(({ stages }) => stages),
-		}))
+
 		.findOne();
 
 export const stagesQByTaskId = (taskId: string) => (q: InitialQueryBuilder) =>
