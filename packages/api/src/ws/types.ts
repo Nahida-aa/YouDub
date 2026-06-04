@@ -8,7 +8,7 @@ import type { TableName } from '#/ws/registry.ts';
 export type TransactionMutation = {
 	type: 'insert' | 'update' | 'delete';
 	id?: string;
-	data?: unknown;
+	data?: Record<string, unknown>;
 };
 
 export type TransactionPayload = {
@@ -37,7 +37,7 @@ export const errorHandler = <I = undefined, T = undefined>(fn: AckFn<I, T>) => {
 	return async (input: I, result: (ret: Ret<T>) => void) => {
 		try {
 			const data = await fn(input);
-			result(data);
+			result({ ok: true, data });
 		} catch (error) {
 			console.error('Error in WebSocket handler:', error);
 			if (error instanceof AppError) {
@@ -48,7 +48,7 @@ export const errorHandler = <I = undefined, T = undefined>(fn: AckFn<I, T>) => {
 						appErrCode.VALIDATION_ERROR,
 						error.message,
 						error.issues,
-					) as Ret<T>,
+					) as unknown as Ret<T>,
 				);
 			} else {
 				result(
@@ -115,7 +115,6 @@ export interface ServerToClientEvents {
 	'broadcast:event': (data: { message: string }) => void;
 	'ml:voxcpm:status': (status: ModelStatus) => void;
 	'ml:voxcpm:progress': (data: { message: string; percent: number }) => void;
-	// listTasks: (data: TaskSummary[]) => void;
 }
 
 export interface InterServerEvents {

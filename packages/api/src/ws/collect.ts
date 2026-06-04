@@ -1,5 +1,5 @@
 import { Server as Engine } from '@socket.io/bun-engine';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import { db } from '#/db/index.ts';
 import type { settings } from '#/feat/settings/table.ts';
 import { tasks } from '#/feat/tasks/table.ts';
@@ -66,6 +66,10 @@ function applyDelete(id: string) {
 	db.delete(tasks).where(eq(tasks.id, id));
 }
 
+const CONFLICT_SET = Object.fromEntries(
+	[...TASK_COLUMNS].filter((c) => c !== 'id').map((col) => [col, sql.raw(`excluded.${col}`)]),
+);
+
 export function applyTransaction(payload: TransactionPayload) {
 	assertCollection(payload.id);
 	db.transaction((tx) => {
@@ -75,14 +79,10 @@ export function applyTransaction(payload: TransactionPayload) {
 					throw new Error('Insert mutation requires row data');
 				}
 				tx.insert(tasks)
-					.values(
-						toTaskInsert(
-							mutation.data as Record<string, unknown>,
-						) as TaskInsert,
-					)
+					.values(toTaskInsert(mutation.data as Record<string, unknown>) as TaskInsert)
 					.onConflictDoUpdate({
 						target: tasks.id,
-						set: toTaskInsert(mutation.data as Record<string, unknown>),
+						set: CONFLICT_SET,
 					});
 				continue;
 			}
@@ -105,3 +105,4 @@ export function applyTransaction(payload: TransactionPayload) {
 		}
 	});
 }
+

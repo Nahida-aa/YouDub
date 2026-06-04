@@ -160,26 +160,22 @@ function progressPercent(stages: TaskStage[]): number {
 }
 
 import { m } from '@repo/shared/i18n/paraglide/messages';
+import { useLiveQuery } from '@tanstack/solid-db';
+import { stagesQByTaskId, tasksQById } from '#/feat/tasks/sync.ts';
 
 function TaskDetail() {
-	const params = useParams({ from: '/tasks/$id' });
+	const id = Route.useParams({ select: (s) => s.id });
 	const navigate = useNavigate();
 
-	const taskQuery = createQuery(() => ({
-		queryKey: ['task', params().id],
-		queryFn: () => getTask(params().id),
-		// staleTime: 2000,
-		refetchInterval: 2000,
-	}));
-	const task = () => taskQuery.data;
-
+	const task = useLiveQuery((q) => tasksQById(id())(q));
+	const stages = useLiveQuery((q) => stagesQByTaskId(id())(q));
 	const logQuery = createQuery(() => ({
-		queryKey: ['taskLog', params().id],
+		queryKey: ['taskLog', id()],
 		queryFn: async () => {
 			try {
-				return (await getTaskLog(params().id)) || '';
+				return (await getTaskLog(id())) || '';
 			} catch {
-				console.log('Failed to fetch log for task', params().id);
+				console.log('Failed to fetch log for task', id());
 				return ''; // Ignore log fetch errors
 			}
 		},
@@ -187,14 +183,6 @@ function TaskDetail() {
 	}));
 	const log = () => logQuery.data || '';
 
-	const descQuery = createQuery(() => ({
-		queryKey: ['taskDesc', params().id],
-		queryFn: () => getTaskDescription(params().id),
-		refetchInterval: 2000,
-	}));
-	const description = () => descQuery.data;
-
-	const error = () => (taskQuery.error as Error)?.message || '';
 	const [deleting, setDeleting] = createSignal(false);
 	const [resuming, setResuming] = createSignal(false);
 	const [stageRerunning, setStageRerunning] = createSignal<string | null>(null);
@@ -203,8 +191,7 @@ function TaskDetail() {
 	async function handleTranslateDesc() {
 		setTranslatingDesc(true);
 		try {
-			await translateTaskDescription(params().id);
-			taskQuery.refetch();
+			await translateTaskDescription(id());
 		} catch (err) {
 			alert(err instanceof Error ? err.message : '翻译简介失败');
 		} finally {
@@ -215,7 +202,7 @@ function TaskDetail() {
 	async function handleDelete() {
 		setDeleting(true);
 		try {
-			await deleteTask(params().id);
+			await deleteTask(id());
 			navigate({ to: '/' });
 		} catch (err) {
 			alert(err instanceof Error ? err.message : '删除失败');
@@ -227,8 +214,7 @@ function TaskDetail() {
 	async function handleResume() {
 		setResuming(true);
 		try {
-			await resumeTask(params().id);
-			taskQuery.refetch();
+			await resumeTask(id());
 		} catch (err) {
 			alert(err instanceof Error ? err.message : '恢复失败');
 		} finally {
@@ -239,8 +225,7 @@ function TaskDetail() {
 	async function handleRerunStage(stage: string) {
 		setStageRerunning(stage);
 		try {
-			await rerunStage(params().id, stage, false);
-			taskQuery.refetch();
+			await rerunStage(id(), stage, false);
 		} catch (err) {
 			alert(err instanceof Error ? err.message : '重跑失败');
 		} finally {
@@ -248,13 +233,11 @@ function TaskDetail() {
 		}
 	}
 
-	const stages = createMemo(() => {
-		const t = task();
-		if (!t?.stages) return [];
-		return [...t.stages].sort(
+	const sortedStages = createMemo(() =>
+		stages().sort(
 			(a, b) => STAGE_ORDER.indexOf(a.name) - STAGE_ORDER.indexOf(b.name),
-		);
-	});
+		),
+	);
 
 	const isRunning = () => task()?.status === 'running';
 	const isFailed = () => task()?.status === 'failed';
@@ -287,12 +270,6 @@ function TaskDetail() {
 				</Show>
 			</div>
 
-			<Show when={error()}>
-				<div class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-					{error()}
-				</div>
-			</Show>
-
 			<Show when={task()}>
 				{/* Progress */}
 				<Card class="">
@@ -302,12 +279,12 @@ function TaskDetail() {
 								<div class="h-2 w-full overflow-hidden rounded-full bg-muted">
 									<div
 										class="h-full rounded-full bg-green-500 transition-all duration-500"
-										style={{ width: `${progressPercent(task()!.stages)}%` }}
+										style={{ width: `${progressPercent(sortedStages())}%` }}
 									/>
 								</div>
 							</div>
 							<span class="text-sm text-muted-foreground">
-								{progressPercent(task()!.stages)}%
+								{progressPercent(sortedStages())}%
 							</span>
 						</div>
 						<Show when={task()!.current_stage && isRunning()}>
@@ -368,33 +345,6 @@ function TaskDetail() {
 						</Show>
 					</CardContent>
 				</Card>
-
-				{/* Description */}
-				<Show when={description()?.src}>
-					<Card>
-						<CardHeader>
-							<CardTitle>视频简介</CardTitle>
-						</CardHeader>
-						<CardContent class="space-y-3 text-sm">
-							<div class="rounded-lg bg-muted/50 p-3">
-								<p class="mb-1 text-xs font-medium text-muted-foreground">
-									原文
-								</p>
-								<p class="whitespace-pre-wrap break-words">
-									{description()!.src}
-								</p>
-							</div>
-							<div class="rounded-lg bg-muted/50 p-3">
-								<p class="mb-1 text-xs font-medium text-muted-foreground">
-									中文
-								</p>
-								<p class="whitespace-pre-wrap break-words">
-									{description()!.dst}
-								</p>
-							</div>
-						</CardContent>
-					</Card>
-				</Show>
 
 				{/* Pipeline Stages */}
 				<Card>
@@ -486,7 +436,7 @@ function TaskDetail() {
 							<video
 								controls
 								class="w-full max-h-[70dvh] rounded-lg"
-								src={finalVideoUrl(params().id)}
+								src={finalVideoUrl(id())}
 								preload="metadata"
 							>
 								<track kind="captions" />
@@ -497,7 +447,7 @@ function TaskDetail() {
 						</CardContent>
 						<CardFooter class="flex gap-2">
 							<a
-								href={finalVideoDownloadUrl(params().id)}
+								href={finalVideoDownloadUrl(id())}
 								download={task()?.title || 'video'}
 							>
 								<Button variant="outline" size="sm">

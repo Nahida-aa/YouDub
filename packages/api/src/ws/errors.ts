@@ -46,7 +46,12 @@ export type Ret<
 	T = undefined,
 	C extends AppErrCode = AppErrCode,
 	D = undefined,
-> = T | RetErr<C, D>;
+> =
+	| {
+			ok: true;
+			data: T;
+	  }
+	| RetErr<C, D>;
 
 export const newErr = <C extends AppErrCode, D = undefined>(
 	code: C,

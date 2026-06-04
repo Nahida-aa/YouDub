@@ -325,19 +325,19 @@ def task_log(task_id: str) -> str:
     return path.read_text(encoding="utf-8") if path.exists() else ""
 
 
-@app.get("/api/tasks/{task_id}/description")
-def get_description(task_id: str) -> dict:
-    task = database.get_task(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found.")
-    from .sources import detect_source
-    source = detect_source(task["url"])
-    path = Path(task["session_path"]) / "metadata" / f"description.{source.target_language}.json" if task.get("session_path") else None
-    if not path or not path.exists():
-        return {"src": "", "dst": ""}
-    import json
-    data = json.loads(path.read_text(encoding="utf-8"))
-    return {"src": data.get("src", ""), "dst": data.get("dst", "")}
+# @app.get("/api/tasks/{task_id}/description")
+# def get_description(task_id: str) -> dict:
+#     task = database.get_task(task_id)
+#     if not task:
+#         raise HTTPException(status_code=404, detail="Task not found.")
+#     from .sources import detect_source
+#     source = detect_source(task["url"])
+#     path = Path(task["session_path"]) / "metadata" / f"description.{source.target_language}.json" if task.get("session_path") else None
+#     if not path or not path.exists():
+#         return {"src": "", "dst": ""}
+#     import json
+#     data = json.loads(path.read_text(encoding="utf-8"))
+#     return {"src": data.get("src", ""), "dst": data.get("dst", "")}
 
 
 @app.post("/api/tasks/{task_id}/translate-description")

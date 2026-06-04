@@ -146,12 +146,18 @@ export function rerunStage(
 	});
 }
 
-export function createTask(url: string): Promise<Task> {
-	return request(`/api/tasks`, {
-		method: 'POST',
-		body: JSON.stringify({ url }),
-	});
-}
+export const createTask = async (url: string) => {
+	const ret = await socket.emitWithAck('createTask', url);
+	if (ret.ok === false) {
+		throw new Error(ret.error.msg);
+	}
+	return ret.data;
+	// if (ret) {
+	// return request(`/api/tasks`, {
+	// 	method: 'POST',
+	// 	body: JSON.stringify({ url }),
+	// });
+};
 
 export function uploadLocalTask(
 	file: File,

@@ -3,7 +3,9 @@ import { toDb0 } from 'agnostic-query/db0/sqlite.js';
 // import { toDrizzle } from 'agnostic-query/drizzle/sqlite';
 import { db, sql } from '#/db/index';
 import { save_youtube_cookie } from '#/feat/settings/cookie.ts';
-import { createTask } from '#/feat/tasks/fn.ts';
+import { createTask, findTaskByVideoId } from '#/feat/tasks/fn.ts';
+import { extractVideoId } from '#/feat/tasks/validate.ts';
+import { enqueue } from '#/feat/tasks/worker.ts';
 import { applyTransaction, assertCollection } from '#/ws/collect.ts';
 import { getTableInfo, tableRegistry } from '#/ws/registry.ts';
 import {
@@ -132,8 +134,24 @@ io.on('connection', async (socket) => {
 
 	socket.on(
 		'createTask',
-		errorHandler(async (url) => {
-			return await createTask(url);
+		errorHandler(async (url: string) => {
+			const videoId = extractVideoId(url);
+
+			const existingId = await findTaskByVideoId(videoId);
+			if (existingId) {
+				return { id: existingId };
+			}
+
+			const [ret] = await createTask(url.trim(), videoId);
+			const id = ret.id;
+			enqueue(ret.id);
+
+			io.emit('transaction', {
+				id: 'tasks',
+				transactionId: crypto.randomUUID(),
+				mutations: [{ type: 'insert', data: ret }],
+			});
+			return { id };
 		}),
 	);
 
