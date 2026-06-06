@@ -6,8 +6,8 @@ import {
 	REPO_ROOT,
 	WORKFOLDER,
 	YOUTUBE_COOKIE_PATH,
-} from './src/config/config.ts';
-import { env } from './src/config/env.ts';
+	env,
+} from '@repo/config';
 import { db } from './src/db/index.ts';
 import { createTask, findTaskByVideoId } from './src/feat/tasks/fn.ts';
 import {

@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { DEMUCS_DIR as DEMUCS_MODEL_PATH } from './../../config/config.ts';
+import { DEMUCS_DIR as DEMUCS_MODEL_PATH } from '@repo/config';
 
 export { DEMUCS_MODEL_PATH };
 

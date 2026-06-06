@@ -4,7 +4,7 @@ import { eq, sql } from 'drizzle-orm';
 import { db } from './../../db/index.ts';
 import { STAGES } from './../../feat/tasks/stages.ts';
 import { taskStages, tasks } from './../../feat/tasks/table.ts';
-import { WORKFOLDER } from './../../config/config.ts';
+import { WORKFOLDER } from '@repo/config';
 
 export function sanitizeText(value: string, fallback = 'untitled'): string {
 	const cleaned = value.replace(/[^\w\u4e00-\u9fff.-]+/g, '_').replace(/_+/g, '_').replace(/^[._]+|[._]+$/g, '');
@@ -38,7 +38,7 @@ export async function createTask(params: {
 	let taskUrl = params.url!;
 
 	if (params.sourceFile) {
-		const direction = `${params.sourceLang || 'zh'}-${params.targetLang || 'en'}`;
+		const direction = `${params.sourceLang || 'auto'}-${params.targetLang || 'en'}`;
 		const filename = basename(params.sourceFile);
 		const uploadDir = join(WORKFOLDER, '_uploads', params.taskId);
 		mkdirSync(uploadDir, { recursive: true });
@@ -54,7 +54,7 @@ export async function createTask(params: {
 			source: 'local',
 			webpage_url: taskUrl,
 			original_path: params.sourceFile,
-			asr_language: params.sourceLang || 'zh',
+			asr_language: params.sourceLang || 'auto',
 			target_language: params.targetLang || 'en',
 		}, null, 2));
 	}

@@ -9,7 +9,7 @@ export interface TTSEngineConfig {
 }
 
 export interface ASREngineConfig {
-  runtime: 'faster-whisper' | 'openai-whisper';
+  runtime: 'faster-whisper' | 'pytorch';
   device: 'cpu' | 'gpu';
 }
 
@@ -19,8 +19,8 @@ export interface TranslateEngineConfig {
 }
 
 export interface SeparateEngineConfig {
-  runtime: 'demucs';
-  device: 'cpu';
+  runtime: 'ort' | 'pytorch';
+  device: 'cpu' | 'gpu' | 'webgpu';
 }
 
 export interface EnginesConfig {
@@ -41,6 +41,6 @@ export function readEnginesConfig(path?: string): EnginesConfig {
     tts: { runtime: e.tts?.runtime ?? 'pytorch', device: e.tts?.device ?? 'gpu' },
     asr: { runtime: e.asr?.runtime ?? 'faster-whisper', device: e.asr?.device ?? 'gpu' },
     translate: { apiBase: e.translate?.apiBase ?? env.OPENAI_BASE_URL, model: e.translate?.model ?? env.OPENAI_MODEL },
-    separate: { runtime: e.separate?.runtime ?? 'demucs', device: e.separate?.device ?? 'cpu' },
+    separate: { runtime: e.separate?.runtime ?? 'ort', device: e.separate?.device ?? 'cpu' },
   };
 }

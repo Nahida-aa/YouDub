@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { WHISPER_ONNX_DIR } from './../../config/config.ts';
+import { WHISPER_ONNX_DIR } from '@repo/config';
 
 const WHISPER_MODEL_PATH = WHISPER_ONNX_DIR;
 

@@ -24,7 +24,7 @@
         "youtubeUrl": { "type": "string", "format": "uri", "description": "YouTube URL" },
         "bilibiliUrl": { "type": "string", "format": "uri", "description": "Bilibili URL" },
         "sourceFile": { "type": "string", "description": "本地视频文件路径" },
-        "sourceLang": { "type": "string", "description": "源语言，如 zh, en", "default": "zh" },
+        "sourceLang": { "type": "string", "description": "源语言，如 zh, en; auto 则自动检测", "default": "auto" },
         "targetLang": { "type": "string", "description": "目标语言，如 en, ja, vi(越南语)", "default": "en" }
       },
       "additionalProperties": false
@@ -100,8 +100,8 @@
           "properties": {
             "runtime": {
               "type": "string",
-              "enum": ["faster-whisper", "openai-whisper"],
-              "description": "运行时: faster-whisper (CTranslate2, 安装时需选 CUDA 或 ROCm 对应 wheel), openai-whisper (PyTorch)"
+              "enum": ["faster-whisper", "pytorch"],
+              "description": "运行时: faster-whisper (CTranslate2), pytorch (openai-whisper)"
             },
             "device": {
               "type": "string",

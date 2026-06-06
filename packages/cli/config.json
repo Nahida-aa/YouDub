@@ -1,9 +1,9 @@
 {
-  "command": "createTask",
-  "createTask": {
-    "sourceFile": "/home/aa/下载/14.mp4",
-    "sourceLang": "zh",
-    "targetLang": "vi"
+  "$schema": "./config.schema.json",
+  "command": "resumeTask",
+  "resumeTask": {
+    "taskId": "VLmETGh00W",
+    "resumeFrom": "tts"
   },
   "engines": {
     "separate": {
@@ -12,10 +12,10 @@
     },
     "asr": {
       "runtime": "faster-whisper",
-      "device": "gpu"
+      "device": "cpu"
     },
     "tts": {
-      "runtime": "pytorch",
+      "runtime": "ort",
       "device": "cpu"
     }
   }
