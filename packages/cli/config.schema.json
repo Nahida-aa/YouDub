@@ -34,7 +34,7 @@
       "description": "resumeTask 参数",
       "properties": {
         "taskId": { "type": "string", "description": "任务 ID（videoId）" },
-        "resumeFrom": { "type": "string", "description": "从此 stage 开始重跑（含该 stage），之前的 stages 保留不变" }
+        "resumeFrom": { "type": "string", "enum": ["download", "separate", "asr", "asr_fix", "translate", "split_audio", "tts", "merge_audio", "merge_video"], "description": "从此 stage 开始重跑（含该 stage），之前的 stages 保留不变" }
       },
       "required": ["taskId"],
       "additionalProperties": false
@@ -44,7 +44,7 @@
       "description": "rerunStage 参数",
       "properties": {
         "taskId": { "type": "string", "description": "任务 ID（videoId）" },
-        "stageName": { "type": "string", "description": "要重跑的 stage 名称" }
+        "stageName": { "type": "string", "enum": ["download", "separate", "asr", "asr_fix", "translate", "split_audio", "tts", "merge_audio", "merge_video"], "description": "要重跑的 stage 名称" }
       },
       "required": ["taskId", "stageName"],
       "additionalProperties": false
@@ -77,14 +77,14 @@
       "type": "object",
       "description": "各 stage 的引擎配置",
       "properties": {
-        "tts": {
+        "separate": {
           "type": "object",
-          "description": "语音合成引擎",
+          "description": "人声分离引擎 (Demucs)",
           "properties": {
             "runtime": {
               "type": "string",
-              "enum": ["ort", "pytorch", "cloud"],
-              "description": "运行时: ort (onnxruntime-node), pytorch (Python子进程), cloud (远程API)"
+              "enum": ["ort", "pytorch"],
+              "description": "运行时: ort (onnxruntime-node, RTF ~1.0), pytorch (Python子进程, RTF ~2.0)"
             },
             "device": {
               "type": "string",
@@ -126,18 +126,20 @@
           },
           "description": "翻译引擎(OpenAI兼容API);默认从 OPENAI_BASE_URL / OPENAI_MODEL 环境变量读取"
         },
-        "separate": {
+        "tts": {
           "type": "object",
-          "description": "人声分离引擎 (Demucs)",
+          "description": "语音合成引擎",
           "properties": {
             "runtime": {
               "type": "string",
-              "enum": ["ort", "pytorch"],
-              "description": "运行时: ort (onnxruntime-node, RTF ~1.0), pytorch (Python子进程, RTF ~2.0)"
+              "enum": ["ort", "pytorch", "cloud"],
+              "default": "pytorch",
+              "description": "运行时: ort (onnxruntime-node), pytorch (Python子进程), cloud (远程API)"
             },
             "device": {
               "type": "string",
               "enum": ["cpu", "gpu", "webgpu"],
+              "default": "gpu",
               "description": "不填则自动检测: cpu, gpu (pytorch 映射为 cuda; ROCm 下 cuda 通过 HIP 层兼容), webgpu (仅 ort)"
             }
           },

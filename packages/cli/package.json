@@ -4,6 +4,9 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsgo --noEmit",
+        "db:pull": "drizzle-kit pull",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
     "run": "bun run-task.ts"
   },
   "dependencies": {

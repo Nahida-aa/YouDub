@@ -38,7 +38,7 @@ export function readEnginesConfig(path?: string): EnginesConfig {
   } catch { /* use defaults */ }
   const e = file.engines ?? {};
   return {
-    tts: { runtime: e.tts?.runtime ?? 'ort', device: e.tts?.device ?? 'webgpu' },
+    tts: { runtime: e.tts?.runtime ?? 'pytorch', device: e.tts?.device ?? 'gpu' },
     asr: { runtime: e.asr?.runtime ?? 'faster-whisper', device: e.asr?.device ?? 'gpu' },
     translate: { apiBase: e.translate?.apiBase ?? env.OPENAI_BASE_URL, model: e.translate?.model ?? env.OPENAI_MODEL },
     separate: { runtime: e.separate?.runtime ?? 'demucs', device: e.separate?.device ?? 'cpu' },

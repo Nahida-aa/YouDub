@@ -46,7 +46,7 @@ export async function createTask(params: {
 		taskUrl = `local://upload/${params.taskId}?direction=${direction}&filename=${encodeURIComponent(filename)}`;
 
 		// Write local_info.json immediately so session_path-based lookup works
-		const sessionPath = join(WORKFOLDER, params.taskId);
+		const sessionPath = join(WORKFOLDER, 'local', params.taskId);
 		mkdirSync(join(sessionPath, 'metadata'), { recursive: true });
 		writeFileSync(join(sessionPath, 'metadata', 'local_info.json'), JSON.stringify({
 			id: params.taskId,
@@ -57,9 +57,6 @@ export async function createTask(params: {
 			asr_language: params.sourceLang || 'zh',
 			target_language: params.targetLang || 'en',
 		}, null, 2));
-
-		// Set session_path to flat WORKFOLDER/taskId (no ytdlp metadata available)
-		await db.update(tasks).set({ session_path: join(WORKFOLDER, params.taskId) }).where(eq(tasks.id, params.taskId));
 	}
 
 	const { ret } = await db.transaction(async (tx) => {
@@ -87,6 +84,11 @@ export async function createTask(params: {
 
 		return { ret };
 	});
+
+	if (params.sourceFile) {
+		await db.update(tasks).set({ session_path: `workfolder/local/${params.taskId}` }).where(eq(tasks.id, params.taskId));
+	}
+
 	return ret;
 }
 

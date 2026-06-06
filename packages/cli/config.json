@@ -6,19 +6,17 @@
     "targetLang": "vi"
   },
   "engines": {
-    "tts": {
-      "runtime": "pytorch",
+    "separate": {
+      "runtime": "ort",
       "device": "cpu"
     },
     "asr": {
       "runtime": "faster-whisper",
       "device": "gpu"
     },
-    "separate": {
-      "runtime": "ort",
+    "tts": {
+      "runtime": "pytorch",
       "device": "cpu"
     }
-  }
-}
   }
 }

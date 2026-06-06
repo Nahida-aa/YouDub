@@ -18,7 +18,7 @@ import {
 } from './src/feat/tasks/pipeline-runner.ts';
 import { tasks } from './src/feat/tasks/table.ts';
 import { extractVideoId, isYouTubeUrl } from './src/feat/tasks/validate.ts';
-import { randomUUID } from 'node:crypto';
+import { timeId } from '../shared/db/timeId.ts';
 
 type Command =
 	| 'startTask'
@@ -104,7 +104,7 @@ switch (cmd) {
 			console.error('createTask: need youtubeUrl, bilibiliUrl, or sourceFile in config.json');
 			process.exit(1);
 		}
-		const videoId = url ? extractVideoId(url) : randomUUID();
+		const videoId = url ? extractVideoId(url) : timeId({ size: 10 });
 		try {
 			if (url) {
 				const existing = await findTaskByVideoId(videoId);
