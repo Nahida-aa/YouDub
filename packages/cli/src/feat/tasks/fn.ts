@@ -3,6 +3,11 @@ import { db } from './../../db/index.ts';
 import { STAGES } from './../../feat/tasks/stages.ts';
 import { taskStages, tasks } from './../../feat/tasks/table.ts';
 
+export function sanitizeText(value: string, fallback = 'untitled'): string {
+	const cleaned = value.replace(/[^\w\u4e00-\u9fff.-]+/g, '_').replace(/_+/g, '_').replace(/^[._]+|[._]+$/g, '');
+	return cleaned.slice(0, 120) || fallback;
+}
+
 export function nowISO(): string {
 	return new Date().toISOString().replace(/\.\d{3}Z$/, '');
 }

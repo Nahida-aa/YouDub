@@ -1,5 +1,5 @@
 import { appendFileSync, mkdirSync, existsSync, readFileSync, writeFileSync, statSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { db } from '#/db/index.ts';
 import { eq, sql } from 'drizzle-orm';
@@ -7,7 +7,8 @@ import { io } from '#/socket.io/io.ts';
 import { tasks, taskStages } from '#/feat/tasks/table.ts';
 import { STAGES } from '#/feat/tasks/stages.ts';
 import { extractVideoId, isYouTubeUrl } from '#/feat/tasks/validate.ts';
-import { LOG_DIR, SESSION_DIR, WORKFOLDER, openaiDefaults, YOUTUBE_COOKIE_PATH } from '#/config/config.ts';
+import { sanitizeText } from '#/feat/tasks/fn.ts';
+import { LOG_DIR, REPO_ROOT, SESSION_DIR, WORKFOLDER, openaiDefaults, YOUTUBE_COOKIE_PATH } from '#/config/config.ts';
 import { env } from '#/config/env.ts';
 import { Demucs } from '#/ml/demucs/demucs.ts';
 import { transcribe as whisperTranscribe } from '#/ml/whisper/whisper.ts';
@@ -65,8 +66,8 @@ function ffmpeg(args: string[], timeout = 120_000) {
 
 // ── Stage 1: download ──
 async function stageDownload(taskId: string, sessionPath: string, url: string) {
-  const mediaDir = join(sessionPath, 'media');
-  const videoPath = join(mediaDir, 'video_source.mp4');
+  let mediaDir = join(sessionPath, 'media');
+  let videoPath = join(mediaDir, 'video_source.mp4');
 
   // If video already exists on disk, skip download entirely
   if (existsSync(videoPath)) {
@@ -118,23 +119,47 @@ async function stageDownload(taskId: string, sessionPath: string, url: string) {
     throw new Error(`Cannot download: unsupported URL "${url}". Use a YouTube/Bilibili URL or upload a local file.`);
   }
 
+  const isYT = isYouTubeUrl(url);
+  const authArgs: string[] = [];
+  if (isYT && existsSync(YOUTUBE_COOKIE_PATH)) authArgs.push('--cookies', YOUTUBE_COOKIE_PATH);
+  if (isYT && env.YTDLP_PROXY_PORT) authArgs.push('--proxy', `http://127.0.0.1:${env.YTDLP_PROXY_PORT}`);
+
+  // 1. Get metadata first to compute structured session path (like Python)
+  let resolvedSession = sessionPath;
+  try {
+    const infoArgs = ['--dump-json', ...authArgs, url];
+    const infoR = spawnSync('yt-dlp', infoArgs, { stdio: ['pipe', 'pipe', 'pipe'], timeout: 30_000 });
+    if (infoR.status === 0 && infoR.stdout.length > 0) {
+      const info = JSON.parse(infoR.stdout.toString());
+      const uploader = sanitizeText(info.uploader || '', 'unknown');
+      const title = sanitizeText(info.title || '', 'untitled');
+      const videoId = info.id || extractVideoId(url);
+      resolvedSession = join(WORKFOLDER, uploader, `${title}__${videoId}`);
+
+      // Save metadata early
+      mkdirSync(join(resolvedSession, 'metadata'), { recursive: true });
+      writeFileSync(join(resolvedSession, 'metadata', 'ytdlp_info.json'), infoR.stdout);
+
+      // Update DB with structured path
+      await updateTaskDB(taskId, { session_path: relative(REPO_ROOT, resolvedSession) });
+    }
+  } catch { /* fall back to flat path */ }
+
+  // Reassign mediaDir/videoPath if resolvedSession was updated
+  mediaDir = join(resolvedSession, 'media');
+  videoPath = join(mediaDir, 'video_source.mp4');
+
   await updateStageDB(taskId, 'download', { last_message: 'Downloading video...', progress: 0 });
   mkdirSync(mediaDir, { recursive: true });
-  mkdirSync(join(sessionPath, 'metadata'), { recursive: true });
+  mkdirSync(join(resolvedSession, 'metadata'), { recursive: true });
 
   const ytArgs: string[] = [
     '-f', 'bestaudio[ext=m4a]+bestvideo[ext=mp4]/best[ext=mp4]/best',
     '--merge-output-format', 'mp4',
     '-o', join(mediaDir, 'video_source.%(ext)s'),
+    ...authArgs,
+    url,
   ];
-  const isYT = isYouTubeUrl(url);
-  if (isYT && existsSync(YOUTUBE_COOKIE_PATH)) {
-    ytArgs.push('--cookies', YOUTUBE_COOKIE_PATH);
-  }
-  if (isYT && env.YTDLP_PROXY_PORT) {
-    ytArgs.push('--proxy', `http://127.0.0.1:${env.YTDLP_PROXY_PORT}`);
-  }
-  ytArgs.push(url);
 
   const r = spawnSync('yt-dlp', ytArgs, { stdio: ['pipe', 'pipe', 'pipe'], timeout: 300_000 });
 
@@ -143,18 +168,6 @@ async function stageDownload(taskId: string, sessionPath: string, url: string) {
   if (r.status !== 0) throw new Error(`yt-dlp exit ${r.status}: ${r.stderr.toString().slice(0, 200)}`);
 
   if (!existsSync(videoPath)) throw new Error('yt-dlp did not produce video_source.mp4');
-
-  // Write info JSON separately
-  try {
-    const infoArgs = ['--dump-json'];
-    if (isYT && existsSync(YOUTUBE_COOKIE_PATH)) infoArgs.push('--cookies', YOUTUBE_COOKIE_PATH);
-    if (isYT && env.YTDLP_PROXY_PORT) infoArgs.push('--proxy', `http://127.0.0.1:${env.YTDLP_PROXY_PORT}`);
-    infoArgs.push(url);
-    const infoR = spawnSync('yt-dlp', infoArgs, { stdio: ['pipe', 'pipe', 'pipe'], timeout: 30_000 });
-    if (infoR.status === 0 && infoR.stdout.length > 0) {
-      writeFileSync(join(sessionPath, 'metadata', 'ytdlp_info.json'), infoR.stdout);
-    }
-  } catch { /* metadata is optional */ }
 
   await updateStageDB(taskId, 'download', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Downloaded' });
 }
@@ -266,7 +279,7 @@ async function stageAsrFix(taskId: string, sessionPath: string) {
   const asrFile = join(metadataDir, 'asr.json');
   const fixedFile = join(metadataDir, 'asr_fixed.json');
 
-  if (existsSync(fixedFile)) {
+  if (existsSync(fixedFile) && existsSync(asrFile) && statSync(asrFile).mtimeMs <= statSync(fixedFile).mtimeMs) {
     await updateStageDB(taskId, 'asr_fix', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Already fixed' });
     return;
   }
@@ -296,7 +309,7 @@ async function stageTranslate(taskId: string, sessionPath: string) {
   const fixedFile = join(metadataDir, 'asr_fixed.json');
   const translationFile = join(metadataDir, 'translation.zh.json');
 
-  if (existsSync(translationFile)) {
+  if (existsSync(translationFile) && existsSync(fixedFile) && statSync(fixedFile).mtimeMs <= statSync(translationFile).mtimeMs) {
     await updateStageDB(taskId, 'translate', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Already translated' });
     return;
   }
@@ -569,7 +582,7 @@ async function stageMergeAudio(taskId: string, sessionPath: string) {
 
   const dubbingFile = join(tmpDir, 'audio_dubbing.wav');
   const timingsFile = join(metadataDir, 'timings.json');
-  if (existsSync(dubbingFile) && existsSync(timingsFile)) {
+  if (existsSync(dubbingFile) && existsSync(timingsFile) && existsSync(translationFile) && statSync(translationFile).mtimeMs <= statSync(dubbingFile).mtimeMs) {
     await updateStageDB(taskId, 'merge_audio', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Already merged' });
     return;
   }
@@ -827,10 +840,10 @@ const STAGE_HANDLERS: Record<string, (taskId: string, sessionPath: string, task:
 };
 
 export async function runPipeline(taskId: string) {
-  const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId));
+  let [task] = await db.select().from(tasks).where(eq(tasks.id, taskId));
   if (!task) throw new Error(`Task ${taskId} not found`);
 
-  const sessionPath = join(SESSION_DIR, taskId);
+  let sessionPath = task.session_path ? resolve(REPO_ROOT, task.session_path) : join(SESSION_DIR, taskId);
   mkdirSync(sessionPath, { recursive: true });
 
   await updateTaskDB(taskId, { status: 'running', started_at: nowISO(), session_path: sessionPath });
@@ -854,6 +867,10 @@ export async function runPipeline(taskId: string) {
       await updateTaskDB(taskId, { status: 'failed', error_message: msg });
       return;
     }
+
+    // Re-read task after each stage (download may have updated session_path)
+    const next = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
+    if (next[0]) { task = next[0]; sessionPath = task.session_path || sessionPath; }
   }
 
   await updateTaskDB(taskId, { status: 'succeeded', completed_at: nowISO(), current_stage: null });

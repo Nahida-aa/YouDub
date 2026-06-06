@@ -1,7 +1,6 @@
 import * as ort from 'onnxruntime-node';
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { execSync } from 'node:child_process';
 import { AutoTokenizer } from '@huggingface/transformers';
 import { VOXCPM_MODEL_PATH, checkVoxCPMStatus } from './load';
 
@@ -34,8 +33,6 @@ export interface VoxCPMGenerateOptions {
 }
 
 export class VoxCPM {
-  private prefill?: ort.InferenceSession;
-  private decode?: ort.InferenceSession;
   private vaeEnc?: ort.InferenceSession;
   private vaeDec?: ort.InferenceSession;
   private tokenizer?: any;
@@ -49,7 +46,7 @@ export class VoxCPM {
   ) {
     const ep = options?.executionProvider ?? 'cpu';
     this.transformerEp = [ep];
-    this.vaeEp = [ep];
+    this.vaeEp = ep === 'webgpu' ? ['cpu'] : [ep];
   }
 
   async load() {
@@ -58,11 +55,8 @@ export class VoxCPM {
       throw new Error(`VoxCPM model not ready in ${this.modelDir}. Missing ONNX files.`);
     }
 
-    console.log(`[VoxCPM] Loading ONNX sessions (transformer=${this.transformerEp}, vae=${this.vaeEp})...`);
-    const transformerOpts: ort.InferenceSession.SessionOptions = { executionProviders: this.transformerEp };
+    console.log(`[VoxCPM] Loading VAE sessions (${this.vaeEp})...`);
     const vaeOpts: ort.InferenceSession.SessionOptions = { executionProviders: this.vaeEp };
-    this.prefill = await ort.InferenceSession.create(`${this.modelDir}/voxcpm2_prefill.onnx`, transformerOpts);
-    this.decode = await ort.InferenceSession.create(`${this.modelDir}/voxcpm2_decode_step.onnx`, transformerOpts);
     this.vaeEnc = await ort.InferenceSession.create(`${this.modelDir}/audio_vae_encoder.onnx`, vaeOpts);
     this.vaeDec = await ort.InferenceSession.create(`${this.modelDir}/audio_vae_decoder.onnx`, vaeOpts);
 
@@ -75,35 +69,24 @@ export class VoxCPM {
 
   async generate(options: VoxCPMGenerateOptions): Promise<Float32Array> {
     if (!this.loaded) throw new Error('Call load() first.');
+    const tStart = performance.now();
 
     const cfg = options.cfgValue ?? CFG.defaultCfgValue;
     const minPatches = options.minPatches ?? CFG.minLen;
 
-    // Reload VAE sessions if they were released by a previous generate() call
-    const vaeOpts: ort.InferenceSession.SessionOptions = { executionProviders: this.vaeEp };
-    if (!this.vaeEnc) {
-      this.vaeEnc = await ort.InferenceSession.create(`${this.modelDir}/audio_vae_encoder.onnx`, vaeOpts);
-    }
-    if (!this.vaeDec) {
-      this.vaeDec = await ort.InferenceSession.create(`${this.modelDir}/audio_vae_decoder.onnx`, vaeOpts);
-    }
+    const sessionOpts = (ep: ('cpu' | 'webgpu')[]): ort.InferenceSession.SessionOptions => ({ executionProviders: ep });
 
-    // 1. Encode reference WAV
-    const refFeat = await this._encodeWav(options.referenceWavPath);
-
-    // Release VAE Encoder session to avoid Dawn resource leak
-    await this.vaeEnc.release();
-    this.vaeEnc = undefined;
+    // 1. Encode reference WAV (VAE encoder, kept from load())
+    const refFeat = await this._encodeWav(this.vaeEnc!, options.referenceWavPath);
+    const tVaeEnc = performance.now();
 
     // 2. Tokenize text
     const textIds = await this._tokenize(options.text);
     const textLen = textIds.length;
 
-    // Auto-compute maxPatches from text length (stop_flag is unreliable on ONNX)
     const autoMaxPatches = Math.max(20, Math.ceil(textLen * 6));
     const maxPatches = options.maxPatches ?? autoMaxPatches;
 
-    // 3. Build reference prefix
     const refPatches = Math.floor(refFeat.length / CFG.featDim);
     const totalLen = 2 + refPatches + textLen + 1;
     const zeroFeat = new Float32Array(CFG.featDim);
@@ -128,26 +111,22 @@ export class VoxCPM {
       writeFeat(pos, feat);
     }
 
-    // ref_audio_start
     pushToken(BigInt(CFG.refAudioStartToken), 1, 0, zeroFeat);
-
-    // ref audio patches
     for (let i = 0; i < refPatches; i++) {
       const start = i * CFG.featDim;
       const patch = new Float32Array(refFeat.subarray(start, start + CFG.featDim));
       pushToken(0n, 0, 1, patch);
     }
-
-    // ref_audio_end
     pushToken(BigInt(CFG.refAudioEndToken), 1, 0, zeroFeat);
-
-    // text tokens + audio_start
     for (const id of textIds) {
       pushToken(BigInt(id), 1, 0, zeroFeat);
     }
     pushToken(BigInt(CFG.audioStartToken), 1, 0, zeroFeat);
 
     const seqLen = textTokens.length;
+
+    // 3. Load Prefill (transformer EP) → run → release
+    const prefill = await ort.InferenceSession.create(`${this.modelDir}/voxcpm2_prefill.onnx`, sessionOpts(this.transformerEp));
 
     const prefillFeeds: Record<string, ort.Tensor> = {
       'text': new ort.Tensor('int64', BigInt64Array.from(textTokens), [1, seqLen]),
@@ -156,16 +135,19 @@ export class VoxCPM {
       'feat_mask': new ort.Tensor('int32', new Int32Array(featMask), [1, seqLen]),
     };
 
-    const pfOut = await this.prefill!.run(prefillFeeds);
+    const pfOut = await prefill.run(prefillFeeds);
     let ditHidden = pfOut['dit_hidden'] as ort.Tensor;
     let baseKeys = pfOut['base_next_keys'] as ort.Tensor;
     let baseVals = pfOut['base_next_values'] as ort.Tensor;
     let resKeys = pfOut['residual_next_keys'] as ort.Tensor;
     let resVals = pfOut['residual_next_values'] as ort.Tensor;
     let prefixCond = pfOut['prefix_feat_cond'] as ort.Tensor;
+    await prefill.release();
+    const tPrefill = performance.now();
 
-    // 5. Decode loop
-    console.log(`[VoxCPM] Generating...`);
+    // 4. Load Decode (transformer EP) → loop → release
+    const decode = await ort.InferenceSession.create(`${this.modelDir}/voxcpm2_decode_step.onnx`, sessionOpts(this.transformerEp));
+
     const predPatches: Float32Array[] = [];
 
     for (let step = 0; step < maxPatches; step++) {
@@ -185,7 +167,7 @@ export class VoxCPM {
         'cfg_value': new ort.Tensor('float32', new Float32Array([cfg]), []),
       };
 
-      const decOut = await this.decode!.run(decFeeds);
+      const decOut = await decode.run(decFeeds);
 
       const predFeat = decOut['pred_feat'] as ort.Tensor;
       const pData = predFeat.data as Float32Array;
@@ -203,7 +185,7 @@ export class VoxCPM {
         const stopFlag = decOut['stop_flag'] as ort.Tensor;
         const stopData = stopFlag.data as Uint8Array;
         if (stopData[0] !== 0) {
-          console.log(`[VoxCPM] Stopped at step ${step}`);
+          if (step % 20 !== 19) console.log(`[VoxCPM] Step ${step + 1}/${maxPatches}`);
           break;
         }
       }
@@ -213,8 +195,10 @@ export class VoxCPM {
       }
     }
 
-    // 6. VAE Decode all patches
-    console.log(`[VoxCPM] VAE decoding ${predPatches.length} patches...`);
+    await decode.release();
+    const tDecode = performance.now();
+
+    // 5. VAE Decode (kept from load())
     const numPatches = predPatches.length;
     const zLen = numPatches * CFG.patchSize;
     const zData = new Float32Array(CFG.featDim * zLen);
@@ -234,17 +218,23 @@ export class VoxCPM {
     const aeOut = await this.vaeDec!.run(decFeeds);
     const audioTensor = aeOut['audio'] as ort.Tensor;
     const audioData = audioTensor.data as Float32Array;
+    const tVaeDec = performance.now();
 
-    // Release VAE Decoder session to avoid Dawn resource leak
-    await this.vaeDec.release();
-    this.vaeDec = undefined;
+    const duration = audioData.length / CFG.outSampleRate;
+    const totalMs = tVaeDec - tStart;
+    const rtf = totalMs / (duration * 1000);
 
-    console.log(`[VoxCPM] Generated ${audioData.length} samples at ${CFG.outSampleRate}Hz`);
+    const vaeEncMs = tVaeEnc - tStart;
+    const prefillMs = tPrefill - tVaeEnc;
+    const decodeMs = tDecode - tPrefill;
+    const vaeDecMs = tVaeDec - tDecode;
+    console.log(`[VoxCPM] Generated ${audioData.length} samples (${duration.toFixed(2)}s) in ${(totalMs/1000).toFixed(1)}s | RTF ${rtf.toFixed(2)}`);
+    console.log(`[VoxCPM]   VAE enc ${vaeEncMs.toFixed(0)}ms  prefill ${prefillMs.toFixed(0)}ms  decode ${decodeMs.toFixed(0)}ms  VAE dec ${vaeDecMs.toFixed(0)}ms`);
     return audioData;
   }
 
   private async _tokenize(text: string): Promise<number[]> {
-    const result = await this.tokenizer(text);
+    const result = await this.tokenizer!(text);
     const ids = Array.from(result.input_ids.data as bigint[]).map(Number);
 
     const splitMap = this._buildSplitMap();
@@ -277,11 +267,10 @@ export class VoxCPM {
     return map;
   }
 
-  private async _encodeWav(wavPath: string): Promise<Float32Array> {
+  private async _encodeWav(session: ort.InferenceSession, wavPath: string): Promise<Float32Array> {
     let audio: Float32Array;
     let sampleRate: number;
 
-    // Read WAV file
     const buf = readFileSync(wavPath);
     const header = Buffer.from(buf.buffer, buf.byteOffset, 44);
     const sr = header.readUInt32LE(24);
@@ -308,12 +297,10 @@ export class VoxCPM {
       throw new Error(`Unsupported WAV bit depth: ${bitsPerSample}`);
     }
 
-    // Resample to 16kHz if needed
     if (sampleRate !== CFG.sampleRate) {
       audio = this._resample(audio, sampleRate, CFG.sampleRate);
     }
 
-    // Pad to patch_len multiple
     const patchLen = CFG.patchSize * CFG.chunkSize;
     if (audio.length % patchLen !== 0) {
       const padSize = patchLen - (audio.length % patchLen);
@@ -322,14 +309,12 @@ export class VoxCPM {
       audio = padded;
     }
 
-    // VAE Encoder
-    const encOut = await this.vaeEnc!.run({
+    const encOut = await session.run({
       'audio_data': new ort.Tensor('float32', audio, [1, 1, audio.length]),
     });
     const z = encOut['z'] as ort.Tensor;
     const zData = z.data as Float32Array;
 
-    // Reshape z (1, D, T) → (T/P, P, D)
     const D = CFG.featDim;
     const T = zData.length / D;
     const P = CFG.patchSize;
@@ -338,7 +323,6 @@ export class VoxCPM {
 
     for (let ti = 0; ti < numPatches; ti++) {
       for (let d = 0; d < D; d++) {
-        // Sum over patch dimension (simple average)
         let sum = 0;
         for (let p = 0; p < P; p++) {
           sum += zData[d * T + ti * P + p] || 0;

@@ -131,9 +131,11 @@ switch (cmd) {
 			console.error('No taskId in config.json');
 			process.exit(1);
 		}
-		console.log(`[CLI] Resuming pipeline for task ${taskId}...`);
+		const resumeFrom = config.resumeFrom;
+		const label = resumeFrom ? ` from "${resumeFrom}"` : '';
+		console.log(`[CLI] Resuming pipeline for task ${taskId}${label}...`);
 		try {
-			await resumePipeline(taskId);
+			await resumePipeline(taskId, resumeFrom);
 			console.log('[CLI] Pipeline completed');
 		} catch (err) {
 			console.error('[CLI] Pipeline failed:', err);

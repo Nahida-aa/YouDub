@@ -8,8 +8,10 @@ from urllib.parse import urlparse
 from pydub import AudioSegment
 
 from ..devices import resolve_device
+from .conv_patch import apply_patch
 
 _MODEL = None
+_PATCHED = False
 
 
 def _whisper_cache_file(whisper, name: str, download_root: str | None) -> Path | None:
@@ -47,10 +49,22 @@ def _load_model():
     name = os.getenv("WHISPER_MODEL", "large-v3-turbo")
     resolved = resolve_device("whisper").selected
 
-    # ROCm (Radeon 780M / gfx1103) hangs during conv forward with "GPU Hang"
-    # HW exception (SIGABRT) — cannot be caught. Force CPU on ROCm.
+    # ROCm (Radeon 780M / gfx1103): GPU Hang is 100% deterministic on this HW.
+    # Even tiny (39M) model hangs with SIGSEGV in clean subprocesses (25/25 trials).
+    # conv_patch (GEMM-based conv workaround) has no effect — root cause is likely
+    # incorrect ROCm kernel code gen for gfx1103, not conv-specific.
+    # See packages/research/whisper-rocm-hang.md for full investigation.
     if resolved != "cpu" and getattr(torch.version, "hip", None):
         resolved = "cpu"
+    else:
+        # conv_patch is harmless on non-ROCm systems; apply it in case it helps
+        # on other GPU architectures with MIOpen conv solver issues.
+        global _PATCHED
+        if not _PATCHED:
+            from .conv_patch import apply_patch
+
+            apply_patch()
+            _PATCHED = True
 
     download_root = os.getenv("WHISPER_DOWNLOAD_ROOT") or None
     try:

@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "YouDub CLI Config",
+  "type": "object",
+  "properties": {
+    "command": {
+      "type": "string",
+      "enum": ["startTask", "resumeTask", "rerunStage", "checkVideo", "taskStatus", "createTask"],
+      "description": "要执行的命令"
+    },
+    "taskId": {
+      "type": "string",
+      "description": "任务 ID（videoId）"
+    },
+    "stageName": {
+      "type": "string",
+      "description": "rerunStage 时要重跑的 stage 名称"
+    },
+    "youtubeUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "createTask 时的 YouTube/Bilibili URL"
+    },
+    "resumeFrom": {
+      "type": "string",
+      "description": "resumeTask 时从此 stage 开始重跑（含该 stage），之前的 stages 保留不变"
+    }
+  },
+  "required": ["command"]
+}

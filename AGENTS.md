@@ -9,7 +9,9 @@ AMD Radeon 780M (RDNA 3), ROCm 7.2.3 → `.agents/hardware.md`
 | Demucs (PyTorch) | CPU | GPU hang, RTF ~2.0 (htdemucs, shifts=3, 5min 实测) |
 | Demucs (ONNX, onnxruntime-node) | CPU | **✅ 实际路径**，RTF ~1.0 单 CPU 即可实时 |
 | VoxCPM (PyTorch) | CPU | GPU segfault |
-| VoxCPM (onnxruntime-node WebGPU) | GPU (Vulkan/Dawn) | **✅ 主要路径**，VAE → CPU fallback（Dawn 多 session 资源泄漏 workaround），Prefill+Decode → WebGPU |
+| VoxCPM (Python ONNX CPU, sequential load) | CPU | ✅ **当前路径**，顺序加载模型（VAE→Prefill→Decode→VAE）避免 OOM，24GB 模型分时加载，RTF ~7.4 |
+| VoxCPM (onnxruntime-node WebGPU) | GPU (Vulkan/Dawn) | ⏸️ 暂停，VAE CPU fallback + Dawn 资源泄漏 workaround，GPU Hang 后不可用 |
+| VoxCPM (onnxruntime-node CPU) | CPU | ❌ 废弃，Bun 多版本冲突 + `sharp` 依赖 + OOM（4个session同时加载24GB）|
 | VoxCPM (ORT+MIGraphX) | GPU (ROCm) | ❌ 废弃，10x slower than CPU |
 | CosyVoice3 | CPU | 无 CUDA EP, 编译 ORT + MIGraphX 中（但 gfx1103 MIOpen conv solver hang 可能会堵） |
 | Whisper | GPU (cuda) | 正常 |
