@@ -5,6 +5,7 @@ import { eq, sql } from 'drizzle-orm';
 import { tasks, taskStages } from './../../feat/tasks/table.ts';
 import { getStages } from './../../feat/tasks/stages.ts';
 import { WORKFOLDER, REPO_ROOT } from '@repo/config';
+import { MLDaemon } from '../../ml/daemon/client.ts';
 import { nowISO, updateStageDB, updateTaskDB, emitLog, currentTask, getStageStatuses } from '../stages/utils.ts';
 import { STAGE_HANDLERS } from '../stages/index.ts';
 
@@ -17,7 +18,7 @@ function readMode(sessionPath: string): string {
   } catch { return 'dub'; }
 }
 
-export async function runPipeline(taskId: string) {
+export async function runPipeline(taskId: string, daemon?: MLDaemon) {
   let { task, sessionPath } = await currentTask(taskId);
   mkdirSync(sessionPath, { recursive: true });
 
@@ -37,7 +38,7 @@ export async function runPipeline(taskId: string) {
     await updateTaskDB(taskId, { current_stage: stage.name });
 
     try {
-      await handler(taskId, sessionPath, task);
+      await handler(taskId, sessionPath, task, daemon);
     } catch (err: any) {
       const msg = err.message ?? String(err);
       emitLog(taskId, `[ERROR] [Pipeline] Stage ${stage.name} failed: ${msg}`);
@@ -54,8 +55,17 @@ export async function runPipeline(taskId: string) {
   emitLog(taskId, `[Pipeline] Task ${taskId} completed`);
 }
 
-export async function resumePipeline(taskId: string, resumeFrom?: string) {
+export async function resumePipeline(taskId: string, resumeFrom?: string, stageOverrides?: Record<string, any>, daemon?: MLDaemon) {
   let { task, sessionPath } = await currentTask(taskId);
+
+  if (stageOverrides) {
+    const infoPath = join(sessionPath, 'metadata', 'local_info.json');
+    let info: any = {};
+    try { info = JSON.parse(readFileSync(infoPath, 'utf-8')); } catch {}
+    info.stages = stageOverrides;
+    writeFileSync(infoPath, JSON.stringify(info, null, 2));
+  }
+
   const mode = readMode(sessionPath);
   const stages = getStages(mode);
 
@@ -100,7 +110,7 @@ export async function resumePipeline(taskId: string, resumeFrom?: string) {
     await updateTaskDB(taskId, { current_stage: stage.name });
 
     try {
-      await handler(taskId, sessionPath, task);
+      await handler(taskId, sessionPath, task, daemon);
     } catch (err: any) {
       const msg = err.message ?? String(err);
       emitLog(taskId, `[ERROR] [Pipeline] Stage ${stage.name} failed: ${msg}`);
@@ -117,7 +127,7 @@ export async function resumePipeline(taskId: string, resumeFrom?: string) {
   emitLog(taskId, `[Pipeline] Task ${taskId} completed`);
 }
 
-export async function rerunSingleStage(taskId: string, stageName: string, stageOverrides?: Record<string, any>) {
+export async function rerunSingleStage(taskId: string, stageName: string, stageOverrides?: Record<string, any>, daemon?: MLDaemon) {
   const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId));
   if (!task) throw new Error(`Task ${taskId} not found`);
 
@@ -145,7 +155,7 @@ export async function rerunSingleStage(taskId: string, stageName: string, stageO
   await updateTaskDB(taskId, { status: 'running', current_stage: stageName });
 
   try {
-    await handler(taskId, sessionPath, task);
+    await handler(taskId, sessionPath, task, daemon);
   } catch (err: any) {
     const msg = err.message ?? String(err);
     emitLog(taskId, `[ERROR] [Pipeline] Stage ${stageName} failed: ${msg}`);

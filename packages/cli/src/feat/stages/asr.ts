@@ -2,9 +2,10 @@ import { existsSync, writeFileSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { REPO_ROOT, readEnginesConfig } from '@repo/config';
+import { MLDaemon } from '../../ml/daemon/client.ts';
 import { readTaskLanguages, nowISO, updateStageDB, emitLog } from './utils.ts';
 
-export async function stageAsr(taskId: string, sessionPath: string) {
+export async function stageAsr(taskId: string, sessionPath: string, daemon?: MLDaemon) {
   await updateStageDB(taskId, 'asr', { last_message: 'Transcribing...', progress: 0 });
 
   const vocalsPath = resolve(REPO_ROOT, sessionPath, 'media', 'audio_vocals.wav');
@@ -18,7 +19,23 @@ export async function stageAsr(taskId: string, sessionPath: string) {
   const pythonBin = join(REPO_ROOT, '.venv', 'bin', 'python');
   const { asrLanguage } = readTaskLanguages(sessionPath);
 
-  if (runtime === 'pytorch') {
+  if (runtime === 'pytorch' && daemon?.ready) {
+    emitLog(taskId, `[ASR] Using Python daemon (device=${device})`);
+    const result = await daemon.runStage('asr', taskId, {
+      vocals_path: vocalsPath,
+      session_path: sessionAbsPath,
+      language: asrLanguage || 'auto',
+      device,
+    });
+    const r = result as Record<string, string>;
+    if (r.detected_language) {
+      const localInfoPath = join(sessionAbsPath, 'metadata', 'local_info.json');
+      let local: any = {};
+      try { local = JSON.parse(readFileSync(localInfoPath, 'utf-8')); } catch {}
+      local.asr_language = r.detected_language;
+      writeFileSync(localInfoPath, JSON.stringify(local, null, 2));
+    }
+  } else if (runtime === 'pytorch') {
     await asrPytorch(taskId, vocalsPath, sessionAbsPath, asrLanguage, device, pythonBin);
   } else {
     await asrFasterWhisper(taskId, vocalsPath, sessionAbsPath, asrLanguage, device, pythonBin);

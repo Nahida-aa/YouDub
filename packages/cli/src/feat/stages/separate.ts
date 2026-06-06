@@ -3,9 +3,10 @@ import { join, dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { Demucs } from './../../ml/demucs/demucs.ts';
 import { readEnginesConfig, REPO_ROOT } from '@repo/config';
+import { MLDaemon } from '../../ml/daemon/client.ts';
 import { nowISO, updateStageDB, ffmpeg, emitLog } from './utils.ts';
 
-export async function stageSeparate(taskId: string, sessionPath: string) {
+export async function stageSeparate(taskId: string, sessionPath: string, daemon?: MLDaemon) {
   await updateStageDB(taskId, 'separate', { last_message: 'Separating audio...', progress: 0 });
 
   const videoPath = join(sessionPath, 'media', 'video_source.mp4');
@@ -28,7 +29,18 @@ export async function stageSeparate(taskId: string, sessionPath: string) {
   const engines = readEnginesConfig();
   const { runtime, device } = engines.separate;
 
-  if (runtime === 'pytorch') {
+  if (runtime === 'pytorch' && daemon?.ready) {
+    emitLog(taskId, `[Separate] Using Python daemon (device=${device})`);
+    const absSession = resolve(REPO_ROOT, sessionPath);
+    const absVideo = resolve(REPO_ROOT, sessionPath, 'media', 'video_source.mp4');
+    await daemon.runStage('separate', taskId, {
+      video_path: absVideo,
+      session_path: absSession,
+      device,
+    }, (current, _total) => {
+      updateStageDB(taskId, 'separate', { progress: current, last_message: `Separating ${current}%...` });
+    });
+  } else if (runtime === 'pytorch') {
     await separatePytorch(taskId, sessionPath, videoPath, device);
   } else {
     await separateOrt(taskId, sessionPath, videoPath, device);

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { nowISO, updateStageDB, updateTaskDB, srtTime, ffmpeg } from './utils.ts';
+import { nowISO, updateStageDB, updateTaskDB, srtTime, ffmpeg, readTaskLanguages, translationFilePath } from './utils.ts';
 
 function writeSrt(translation: any[], dstLang: string, outputPath: string) {
   const CLOSING_QUOTES = new Set(['"', "'", '」', '』', '》', '）', '】', '\u201d', '\u2019', ']']);
@@ -111,8 +111,8 @@ function probeStyle(videoFile: string, dstLang: string, overrides?: { fontSize?:
   const fontSize = overrides?.fontSize ?? (isPortrait ? (dstLang === 'zh' ? 12 : 9) : (dstLang === 'zh' ? 24 : 18));
   const marginV = overrides?.marginV ?? (isPortrait ? 70 : 5);
   const alignment = overrides?.alignment ?? 2;
-  const outline = overrides?.outline ?? 2;
-  const shadow = overrides?.shadow ?? 0;
+  const outline = overrides?.outline ?? 0;
+  const shadow = overrides?.shadow ?? 1;
   const font = dstLang === 'zh' ? 'Noto Sans CJK SC' : 'Arial';
   return `FontName=${font},FontSize=${fontSize},PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=${outline > 0 ? 1 : 0},Outline=${outline},Shadow=${shadow},Alignment=${alignment},MarginV=${marginV}`;
 }
@@ -123,7 +123,6 @@ export async function stageMergeVideo(taskId: string, sessionPath: string) {
   const metadataDir = join(sessionPath, 'metadata');
 
   const videoFile = join(mediaDir, 'video_source.mp4');
-  const finalVideo = join(mediaDir, 'video_final.mp4');
 
   if (!existsSync(videoFile)) throw new Error('video_source.mp4 not found');
 
@@ -135,9 +134,12 @@ export async function stageMergeVideo(taskId: string, sessionPath: string) {
     stageOverrides = info.stages?.merge_video;
   } catch { /* use default */ }
 
+  const finalVideo = join(mediaDir, mode === 'subtitle' ? 'video_final_subtitle.mp4' : 'video_final.mp4');
+
   if (mode === 'subtitle') {
-    const translationFile = join(metadataDir, 'translation.zh.json');
-    if (!existsSync(translationFile)) throw new Error('translation.zh.json not found');
+    const { targetLanguage: dstLangCode } = readTaskLanguages(sessionPath);
+    const translationFile = translationFilePath(sessionPath, dstLangCode);
+    if (!existsSync(translationFile)) throw new Error(`translation.${dstLangCode}.json not found`);
     const data = JSON.parse(readFileSync(translationFile, 'utf-8'));
     const dstLang = dstLangFromTranslation(data.translation);
     const subPath = join(metadataDir, `subtitles.${dstLang}.srt`);

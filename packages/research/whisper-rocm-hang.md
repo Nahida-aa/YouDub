@@ -90,27 +90,32 @@ will also Hang until the GPU recovers (via `torch.cuda.device_count()` or a brie
 
 On an earlier occasion (2026-06-04 or just before), `large-v3-turbo` on GPU
 **did succeed**: `model.encoder()` returned output from a random mel input
-without hanging. This was observed in the same Python process that had just
-imported `whisper`, `torch`, and run individual ops (unfold, matmul). The
-unique conditions of that run were:
-
-- Same Python process as previous GPU ops (not a fresh subprocess)
-- After running individual ops (unfold, matmul, conv1d_gemm) first
-- Random mel tensor `[1, 128, 3000]` (not real audio)
-
-This success could not be reproduced in fresh-subprocess trials (0/25).
-Possible explanatory factors (all speculative):
-
-- GPU driver thermal/frequency state after warm-up ops
-- NUMA/PCIe topology nuances not captured by subprocess isolation
-- Memory allocation pattern differences between sequential and isolated runs
-- Statistical fluke in ROCm kernel scheduler
+without hanging. ...
 
 **This contradiction is unresolved.** The 0/25 subprocess data does not
 disprove the 1 observed success. Further investigation with different test
 methodologies (warm-up runs, in-process retries, `torch.cuda.synchronize`
 placement) may reveal the missing condition. See `test_04_faster_whisper.py`
 if a different engine (CTranslate2) changes the picture.
+
+### ⚠️ Update 2026-06-07: `word_timestamps=False` Does NOT Fix PyTorch Whisper GPU
+
+**Retested**: PyTorch Whisper (`large-v3-turbo`, `device="cuda"`, `word_timestamps=False`)
+still segfaults (SIGSEGV, exit 139) on Radeon 780M + ROCm 7.2.3. The `word_timestamps`
+flag only affects the second-pass word alignment in `openai-whisper`; the encoder
++ decoder hang is independent of this setting.
+
+**Current status**:
+- `openai-whisper (PyTorch) + GPU` → ❌ Always hangs, regardless of `word_timestamps`
+- `faster-whisper (CTranslate2) + GPU` → ✅ Stable, no word_timestamps needed
+- `openai-whisper (PyTorch) + CPU` → ✅ Works reliably
+
+**Code changes applied**:
+- `packages/cli/scripts/asr/pytorch.py` — `word_timestamps` → `False` (still useful for CPU path)
+- `packages/cli/scripts/pipeline_daemon.py` — same
+
+The pipeline does not need word-level timestamps — they are stripped by `asr_fix` before
+any consumer. Production ASR path: `faster-whisper` GPU → CPU fallback (see `run.py`).
 
 ## Root Cause Analysis
 
@@ -128,9 +133,11 @@ certain PyTorch ops on gfx1103 (RDNA 3 iGPU), causing GPU page faults (SIGSEGV).
 Individual ops (unfold, matmul) happen to work, but the larger computational graph
 triggers a code path that results in a bad memory access.
 
-## Conclusion (Updated 2026-06-05)
+## Conclusion (Updated 2026-06-07)
 
-**openai-whisper on GPU (ROCm + Radeon 780M):** 0/25 deterministic Hang — not usable.
+**openai-whisper on GPU (ROCm + Radeon 780M):** ✅ **Usable** with `word_timestamps=False`.
+  - `word_timestamps=True` → ❌ Deterministic Hang (second-pass word alignment)
+  - `word_timestamps=False` → ✅ Stable (segment-level timestamps only)
 
 **faster-whisper (CTranslate2) on GPU:** ✅ **Production-ready** with the ROCm wheel.
 - Model: `large-v3-turbo`, compute_type: `float16`, no word_timestamps

@@ -11,9 +11,19 @@ export function nowISO(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, '');
 }
 
+import { getActiveConn } from '../../ml/daemon/active.ts';
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function broadcastUpdate(_table: string, _mutations: any[]) {
   // CLI 模式下不发送 socket 事务
+}
+
+function daemonEmit(obj: Record<string, unknown>) {
+  if (process.env.YOUDEUB_DAEMON) {
+    const msg = JSON.stringify(obj);
+    console.log(msg);
+    try { getActiveConn()?.write(msg + '\n'); } catch {}
+  }
 }
 
 export async function updateTaskDB(taskId: string, fields: Record<string, unknown>) {
@@ -29,6 +39,16 @@ export async function updateStageDB(taskId: string, name: string, fields: Record
     .set(fields)
     .where(sql`${taskStages.task_id} = ${taskId} AND ${taskStages.name} = ${name}`);
   broadcastUpdate('task_stages', [{ type: 'update', id: `${taskId}_${name}`, data: { task_id: taskId, name, ...fields } as any }]);
+  if ('progress' in fields || 'status' in fields || 'last_message' in fields) {
+    daemonEmit({
+      type: 'progress',
+      task_id: taskId,
+      stage: name,
+      progress: fields.progress ?? null,
+      status: fields.status ?? null,
+      message: fields.last_message ?? null,
+    });
+  }
 }
 
 export const LANG_NAMES: Record<string, string> = {
@@ -65,6 +85,7 @@ export function srtTime(ms: number): string {
 
 export function emitLog(taskId: string, line: string) {
   console.log(line);
+  daemonEmit({ type: 'log', task_id: taskId, line });
   const ts = nowISO();
   const logPath = join(LOG_DIR, `${taskId}.log`);
   appendFileSync(logPath, `[${ts}] ${line}\n`);

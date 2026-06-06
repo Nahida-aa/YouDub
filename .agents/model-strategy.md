@@ -8,7 +8,9 @@
 | VoxCPM (TTS) | ORT+MIGraphX | GPU (ROCm) | ✅ 可用，**Split strategy**: Prefill/VAE → CPU, Decode → GPU |
 | VoxCPM (TTS) | TypeScript (ONNX) | CPU / webgpu | ONNX 实现中，webgpu EP 可用于 RDNA 3 |
 | CosyVoice3 (TTS) | Python (ONNX) | CPU | 无 CUDA EP（缺 cuDNN 9），ONNX 全链路推理，社区 ayousanz/cosy-voice3-onnx |
-| Whisper (ASR) | Python (PyTorch) | GPU (cuda) | Works fine |
+| Whisper (ASR) | Python (PyTorch) | GPU (cuda) | ❌ Segfault, regardless of `word_timestamps`; use faster-whisper |
+| Whisper (ASR) | Python (faster-whisper / CTranslate2) | GPU (cuda) | ✅ Works, only ~3-5s load time |
+| Whisper (ASR) | Python (PyTorch) | CPU | ✅ Works (~3GB RSS, ~15-30s load) |
 | Translation | Python (OpenAI) | N/A | Remote API |
 
 ## ORT+MIGraphX hybrid strategy

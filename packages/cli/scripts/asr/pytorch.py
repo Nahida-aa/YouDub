@@ -269,7 +269,7 @@ def main() -> None:
     model_name = os.getenv("WHISPER_MODEL", "large-v3-turbo")
     model = whisper.load_model(model_name, device=device)
 
-    result = model.transcribe(str(vocals_file), language=language, word_timestamps=True, verbose=False)
+    result = model.transcribe(str(vocals_file), language=language, word_timestamps=False, verbose=False)
 
     segments = result.get("segments", [])
     utterances = _convert_segments(segments)

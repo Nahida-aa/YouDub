@@ -20,8 +20,7 @@ bun run run
   "$schema": "./config.schema.json",
   "command": "createTask",
   "createTask": {
-    "sourceFile": "https://github-production-user-asset-6210df.s3.amazonaws.com/15737086/581823231-bd02936f-cf3c-4e4b-85b5-0410d38f69f5.mp4",
-    "sourceLang": "auto",
+    "sourceFile": "https://github.com/user-attachments/assets/bd02936f-cf3c-4e4b-85b5-0410d38f69f5",
     "targetLang": "zh"
   },
   "engines": {
@@ -30,7 +29,7 @@ bun run run
       "device": "cuda"
     },
     "asr": {
-      "runtime": "faster-whisper",
+      "runtime": "pytorch",
       "device": "cuda"
     },
     "tts": {
@@ -40,9 +39,8 @@ bun run run
   },
   "stages": {
     "merge_video": {
-      "fontSize": 32,
-      "marginV": 80,
-      "alignment": 2
+      "fontSize": 19,
+      "marginV": 34,
     }
   }
 }

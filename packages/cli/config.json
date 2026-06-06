@@ -1,18 +1,18 @@
 {
   "$schema": "./config.schema.json",
-  "command": "resumeTask",
-  "resumeTask": {
-    "taskId": "VLmkCww00z",
-    "resumeFrom": "translate"
+  "command": "createTask",
+  "createTask": {
+    "sourceFile": "https://github.com/user-attachments/assets/bd02936f-cf3c-4e4b-85b5-0410d38f69f5",
+    "targetLang": "zh"
   },
-  "engines": {
+  "engines": {  
     "separate": {
       "runtime": "pytorch",
       "device": "cpu"
     },
     "asr": {
-      "runtime": "pytorch",
-      "device": "cpu"
+      "runtime": "faster-whisper",
+      "device": "cuda"
     },
     "tts": {
       "runtime": "pytorch",
@@ -21,13 +21,11 @@
   },
   "stages": {
     "translate": {
-      "targetLang": "vi"
+      "targetLang": "zh"
     },
     "merge_video": {
-      "fontSize": 21.5,
-      "marginV": 28,
-      "outline": 0,
-      "shadow": 1
+      "fontSize": 19,
+      "marginV":34
     }
   }
 }

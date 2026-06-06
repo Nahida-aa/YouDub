@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { REPO_ROOT, readEnginesConfig } from '@repo/config';
 import type { TTSEngineConfig } from '@repo/config';
+import { MLDaemon } from '../../ml/daemon/client.ts';
 import { VoxCPMNodeONNX, VoxCPMCloud, VoxCPMPython, writeWav } from '@repo/voxlab';
 import { readTaskLanguages, emitLog, nowISO, updateStageDB } from './utils.ts';
 
@@ -75,7 +76,7 @@ async function runPytorchBatch(
   });
 }
 
-export async function stageTts(taskId: string, sessionPath: string) {
+export async function stageTts(taskId: string, sessionPath: string, daemon?: MLDaemon) {
   const engines = readEnginesConfig();
   const { targetLanguage: dstLangCode } = readTaskLanguages(sessionPath);
   const translationFile = resolve(REPO_ROOT, sessionPath, 'metadata', `translation.${dstLangCode}.json`);
@@ -99,6 +100,26 @@ export async function stageTts(taskId: string, sessionPath: string) {
   }
 
   const ttsCfg = engines.tts;
+
+  if (ttsCfg.runtime === 'pytorch' && daemon?.ready) {
+    emitLog(taskId, `[TTS] Using Python daemon (device=${ttsCfg.device})`);
+    const modelDir = join(REPO_ROOT, 'data', 'modelscope', 'OpenBMB__VoxCPM2');
+    const result = await daemon.runStage('tts', taskId, {
+      translation_file: translationFile,
+      vocals_dir: vocalsDir,
+      tts_dir: ttsDir,
+      model_dir: modelDir,
+      device: ttsCfg.device,
+    }, (current, total) => {
+      updateStageDB(taskId, 'tts', { last_message: `Generating ${current}/${total}...` });
+    });
+    const r = result as Record<string, number>;
+    emitLog(taskId, `[TTS] Batch complete: ${r.generated ?? 0} generated, ${r.skipped ?? 0} skipped, ${r.errors ?? 0} errors`);
+    if (r.generate_time_s) emitLog(taskId, `[VoxCPM] Generated in ${r.generate_time_s}s`);
+    if (r.errors && r.errors > 0) emitLog(taskId, `[WARN] [TTS] ${r.errors} segments had errors`);
+    await updateStageDB(taskId, 'tts', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'TTS done' });
+    return;
+  }
 
   if (ttsCfg.runtime === 'pytorch') {
     await runPytorchBatch(taskId, ttsCfg, translationFile, vocalsDir, ttsDir, translation.length);

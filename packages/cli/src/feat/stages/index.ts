@@ -1,3 +1,4 @@
+import type { MLDaemon } from '../../ml/daemon/client.ts';
 import { stageDownload } from './download.ts';
 import { stageSeparate } from './separate.ts';
 import { stageAsr } from './asr.ts';
@@ -18,14 +19,16 @@ export { stageTts };
 export { stageMergeAudio };
 export { stageMergeVideo };
 
-export const STAGE_HANDLERS: Record<string, (taskId: string, sessionPath: string, task: any) => Promise<void>> = {
+export type StageHandler = (taskId: string, sessionPath: string, task: any, daemon?: MLDaemon) => Promise<void>;
+
+export const STAGE_HANDLERS: Record<string, StageHandler> = {
   download: async (id, sp, task) => stageDownload(id, sp, task.url),
-  separate: (id, sp, _task) => stageSeparate(id, sp),
-  asr: (id, sp, _task) => stageAsr(id, sp),
+  separate: (id, sp, _task, d) => stageSeparate(id, sp, d),
+  asr: (id, sp, _task, d) => stageAsr(id, sp, d),
   asr_fix: (id, sp, _task) => stageAsrFix(id, sp),
   translate: (id, sp, _task) => stageTranslate(id, sp),
   split_audio: (id, sp, _task) => stageSplitAudio(id, sp),
-  tts: (id, sp, _task) => stageTts(id, sp),
+  tts: (id, sp, _task, d) => stageTts(id, sp, d),
   merge_audio: (id, sp, _task) => stageMergeAudio(id, sp),
   merge_video: (id, sp, _task) => stageMergeVideo(id, sp),
 };
