@@ -6,7 +6,7 @@ Usage:
         --translation-file PATH \
         --vocals-dir PATH \
         --tts-dir PATH \
-        --device cpu [--cfg-value 2.0] [--inference-timesteps 10]
+        --device cuda [--cfg-value 2.0] [--inference-timesteps 10]
 
 Outputs [PROGRESS] lines to stdout for each segment.
 Final summary JSON on last line.
@@ -20,6 +20,15 @@ import sys
 import time
 import wave
 import numpy as np
+
+
+def _resolve_device(requested: str) -> str:
+    device = requested.lower().strip()
+    if device in ("gpu", "auto"):
+        return "cuda"
+    if device in ("cpu", "cuda", "mps"):
+        return device
+    return "cuda"
 
 
 def write_wav(wav: np.ndarray, path: str, sample_rate: int = 48000):
@@ -61,7 +70,7 @@ def main():
     parser.add_argument("--translation-file", required=True)
     parser.add_argument("--vocals-dir", required=True)
     parser.add_argument("--tts-dir", required=True)
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--device", default="cuda")
     parser.add_argument("--cfg-value", type=float, default=2.0)
     parser.add_argument("--inference-timesteps", type=int, default=10)
     args = parser.parse_args()
@@ -70,12 +79,14 @@ def main():
 
     t0 = time.perf_counter()
 
+    device = _resolve_device(args.device)
+
     from voxcpm import VoxCPM
 
     model = VoxCPM.from_pretrained(
         args.model_dir,
         load_denoiser=False,
-        device=args.device,
+        device=device,
     )
     load_time = time.perf_counter() - t0
 

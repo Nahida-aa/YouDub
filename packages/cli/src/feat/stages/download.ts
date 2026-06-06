@@ -37,6 +37,11 @@ export async function stageDownload(taskId: string, sessionPath: string, url: st
     if (!existsSync(videoPath)) throw new Error('ffmpeg did not produce video_source.mp4');
 
     const [srcLang, tgtLang] = direction.split('-');
+
+    // Preserve existing fields (e.g. mode) from fn.ts
+    let existing: Record<string, any> = {};
+    try { existing = JSON.parse(readFileSync(join(sessionPath, 'metadata', 'local_info.json'), 'utf-8')); } catch { /* new file */ }
+
     writeFileSync(join(sessionPath, 'metadata', 'local_info.json'), JSON.stringify({
       id: uploadTaskId,
       title: filename.replace(/\.\w+$/, ''),
@@ -45,6 +50,7 @@ export async function stageDownload(taskId: string, sessionPath: string, url: st
       original_path: sourceFile,
       asr_language: srcLang,
       target_language: tgtLang,
+      mode: existing.mode || 'dub',
     }, null, 2));
 
     await updateStageDB(taskId, 'download', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Imported' });

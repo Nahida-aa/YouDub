@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { db } from './../../db/index.ts';
 import { eq, sql } from 'drizzle-orm';
 import { tasks, taskStages } from './../../feat/tasks/table.ts';
-import { STAGES } from './../../feat/tasks/stages.ts';
+import { getStages } from './../../feat/tasks/stages.ts';
 import { LOG_DIR, WORKFOLDER, REPO_ROOT } from '@repo/config';
 
 export function nowISO(): string {
@@ -136,8 +136,13 @@ export async function getStageStatuses(taskId: string) {
     .from(taskStages)
     .where(eq(taskStages.task_id, taskId));
 
+  let mode = 'dub';
+  let localInfo: any = {};
+  try { localInfo = JSON.parse(readFileSync(join(REPO_ROOT, task.session_path || task.id, 'metadata', 'local_info.json'), 'utf-8')); mode = localInfo.mode || 'dub'; } catch { /* use default */ }
+
+  const stageSpecs = getStages(mode);
   const stageMap = new Map(rows.map(r => [r.name, r]));
-  const stages = STAGES.map(s => enrichStage(stageMap.get(s.name) ?? { name: s.name, label: s.label, status: 'pending', progress: 0, last_message: null, error_message: null, started_at: null, completed_at: null }));
+  const stages = stageSpecs.map(s => enrichStage(stageMap.get(s.name) ?? { name: s.name, label: s.label, status: 'pending', progress: 0, last_message: null, error_message: null, started_at: null, completed_at: null }));
 
   return {
     taskId,

@@ -1,21 +1,22 @@
 {
   "$schema": "./config.schema.json",
-  "command": "resumeTask",
-  "resumeTask": {
-    "taskId": "VLmETGh00W",
-    "resumeFrom": "tts"
+  "command": "createTask",
+  "createTask": {
+    "sourceFile": "/home/aa/repos/learn_ls/YouDub-webui/workfolder/jawed/Me_at_the_zoo__jNQXAC9IVRw/media/video_source.mp4",
+    "targetLang": "zh",
+    "mode": "dub"
   },
   "engines": {
     "separate": {
-      "runtime": "ort",
+      "runtime": "pytorch",
       "device": "cpu"
     },
     "asr": {
-      "runtime": "faster-whisper",
+      "runtime": "pytorch",
       "device": "cpu"
     },
     "tts": {
-      "runtime": "ort",
+      "runtime": "pytorch",
       "device": "cpu"
     }
   }

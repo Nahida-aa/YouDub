@@ -12,19 +12,62 @@ export async function stageAsr(taskId: string, sessionPath: string) {
   if (!existsSync(vocalsPath)) throw new Error('audio_vocals.wav not found');
 
   const engines = readEnginesConfig();
-  const { device } = engines.asr;
-  emitLog(taskId, `[ASR] device=${device}`);
+  const { runtime, device } = engines.asr;
+  emitLog(taskId, `[ASR] runtime=${runtime} device=${device}`);
 
-  const asrScript = join(REPO_ROOT, 'packages', 'cli', 'scripts', 'asr', 'run.py');
   const pythonBin = join(REPO_ROOT, '.venv', 'bin', 'python');
   const { asrLanguage } = readTaskLanguages(sessionPath);
 
-  const baseArgs = [asrScript, vocalsPath, sessionAbsPath, asrLanguage || 'auto'];
+  if (runtime === 'pytorch') {
+    await asrPytorch(taskId, vocalsPath, sessionAbsPath, asrLanguage, device, pythonBin);
+  } else {
+    await asrFasterWhisper(taskId, vocalsPath, sessionAbsPath, asrLanguage, device, pythonBin);
+  }
 
-  const attempts = device === 'cpu' ? 1 : 2;
+  await updateStageDB(taskId, 'asr', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Transcribed' });
+}
+
+async function asrPytorch(taskId: string, vocalsPath: string, sessionAbsPath: string, language: string | undefined, device: string, pythonBin: string) {
+  const script = join(REPO_ROOT, 'packages', 'cli', 'scripts', 'asr', 'pytorch.py');
+  const args = [script, vocalsPath, sessionAbsPath, language || 'auto', '--device', device];
+  const result = spawnSync(pythonBin, args, { maxBuffer: 256 * 1024 * 1024, timeout: 600_000 });
+
+  if (result.error) throw new Error(`Python ASR subprocess failed: ${result.error.message}`);
+  if (result.signal) throw new Error(`ASR killed by signal ${result.signal}: ${(result.stderr?.toString() || '').trim().slice(-200)}`);
+  if (result.status !== 0) throw new Error(`Python ASR exited with status ${result.status}: ${result.stderr?.toString() || ''}`);
+
+  const asrOutputPath = parseAsrOutput(result.stdout?.toString() || '');
+  if (!asrOutputPath || !existsSync(asrOutputPath)) {
+    throw new Error(`Python ASR did not produce output at ${asrOutputPath}`);
+  }
+
+  const asr = JSON.parse(readFileSync(asrOutputPath, 'utf-8'));
+  if (asr.detected_language) {
+    const localInfoPath = join(sessionAbsPath, 'metadata', 'local_info.json');
+    let local: any = {};
+    try { local = JSON.parse(readFileSync(localInfoPath, 'utf-8')); } catch { /* new file */ }
+    local.asr_language = asr.detected_language;
+    writeFileSync(localInfoPath, JSON.stringify(local, null, 2));
+  }
+}
+
+function parseAsrOutput(stdout: string): string | null {
+  for (const line of stdout.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('ASR_OUTPUT:')) return trimmed.slice('ASR_OUTPUT:'.length).trim();
+  }
+  return stdout.trim() || null;
+}
+
+async function asrFasterWhisper(taskId: string, vocalsPath: string, sessionAbsPath: string, language: string | undefined, device: string, pythonBin: string) {
+  const asrScript = join(REPO_ROOT, 'packages', 'cli', 'scripts', 'asr', 'run.py');
+  const baseArgs = [asrScript, vocalsPath, sessionAbsPath, language || 'auto'];
+
+  const useGpu = device !== 'cpu';
+  const attempts = useGpu ? 2 : 1;
 
   for (let attempt = 0; attempt < attempts; attempt++) {
-    const args = attempt === 0 && device === 'gpu' ? baseArgs : [...baseArgs, '--cpu'];
+    const args = attempt === 0 && useGpu ? baseArgs : [...baseArgs, '--cpu'];
     const result = spawnSync(pythonBin, args, {
       maxBuffer: 256 * 1024 * 1024,
       timeout: 600_000,
@@ -32,7 +75,7 @@ export async function stageAsr(taskId: string, sessionPath: string) {
 
     if (result.signal) {
       const stderr = (result.stderr?.toString() || '').trim().slice(-200);
-      if (attempt === 0 && device === 'gpu') {
+      if (attempt === 0 && useGpu) {
         await updateStageDB(taskId, 'asr', { last_message: 'GPU hang, retrying CPU...' });
         continue;
       }
@@ -45,21 +88,20 @@ export async function stageAsr(taskId: string, sessionPath: string) {
       throw new Error(`Python ASR exited with status ${result.status}: ${stderr}`);
     }
 
-    const asrOutputPath = result.stdout?.toString().trim();
+    const asrOutputPath = parseAsrOutput(result.stdout?.toString() || '');
     if (!asrOutputPath || !existsSync(asrOutputPath)) {
       throw new Error(`Python ASR did not produce output at ${asrOutputPath}`);
     }
 
     const asr = JSON.parse(readFileSync(asrOutputPath, 'utf-8'));
     if (asr.detected_language) {
-      const localInfoPath = join(sessionPath, 'metadata', 'local_info.json');
+      const localInfoPath = join(sessionAbsPath, 'metadata', 'local_info.json');
       let local: any = {};
       try { local = JSON.parse(readFileSync(localInfoPath, 'utf-8')); } catch { /* new file */ }
       local.asr_language = asr.detected_language;
       writeFileSync(localInfoPath, JSON.stringify(local, null, 2));
     }
 
-    await updateStageDB(taskId, 'asr', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Transcribed' });
     return;
   }
 }

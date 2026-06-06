@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { nowISO, updateStageDB, updateTaskDB, srtTime, ffmpeg } from './utils.ts';
@@ -98,25 +98,11 @@ function writeSrt(translation: any[], dstLang: string, outputPath: string) {
   writeFileSync(outputPath, lines.join('\n'));
 }
 
-export async function stageMergeVideo(taskId: string, sessionPath: string) {
-  const mediaDir = join(sessionPath, 'media');
-  const tmpDir = join(sessionPath, 'tmp');
-  const metadataDir = join(sessionPath, 'metadata');
+function dstLangFromTranslation(translation: any[]): string {
+  return translation.find((t: any) => t.dst_lang)?.dst_lang || 'zh';
+}
 
-  const videoFile = join(mediaDir, 'video_source.mp4');
-  const dubbingFile = join(tmpDir, 'audio_dubbing.wav');
-  const bgmFile = join(mediaDir, 'audio_bgm.wav');
-  const timingsFile = join(metadataDir, 'timings.json');
-  const finalVideo = join(mediaDir, 'video_final.mp4');
-
-  if (!existsSync(videoFile)) throw new Error('video_source.mp4 not found');
-  if (!existsSync(dubbingFile)) throw new Error('audio_dubbing.wav not found');
-  if (!existsSync(timingsFile)) throw new Error('timings.json not found');
-
-  const data = JSON.parse(readFileSync(timingsFile, 'utf-8'));
-  const dstLang = data.translation.find((t: any) => t.dst_lang)?.dst_lang || 'zh';
-  writeSrt(data.translation, dstLang, join(metadataDir, `subtitles.${dstLang}.srt`));
-
+function probeStyle(videoFile: string, dstLang: string): string {
   const probe = spawnSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', videoFile], { stdio: ['pipe', 'pipe', 'pipe'] });
   const sizeStr = probe.stdout.toString().trim();
   const [wStr, hStr] = sizeStr.split(',');
@@ -125,21 +111,68 @@ export async function stageMergeVideo(taskId: string, sessionPath: string) {
   const fontSize = isPortrait ? (dstLang === 'zh' ? 12 : 9) : (dstLang === 'zh' ? 24 : 18);
   const marginV = isPortrait ? 70 : 5;
   const font = dstLang === 'zh' ? 'Noto Sans CJK SC' : 'Arial';
-  const style = `FontName=${font},FontSize=${fontSize},PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Alignment=2,MarginV=${marginV}`;
+  return `FontName=${font},FontSize=${fontSize},PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Alignment=2,MarginV=${marginV}`;
+}
 
-  const mixedAudio = join(tmpDir, 'audio_mixed.m4a');
-  ffmpeg(['-i', dubbingFile, '-i', bgmFile, '-filter_complex',
-    '[0:a]volume=1.0[a0];[1:a]volume=0.30[a1];[a0][a1]amix=inputs=2:duration=longest:normalize=0[aout]',
-    '-map', '[aout]', '-c:a', 'aac', mixedAudio]);
+export async function stageMergeVideo(taskId: string, sessionPath: string) {
+  const mediaDir = join(sessionPath, 'media');
+  const tmpDir = join(sessionPath, 'tmp');
+  const metadataDir = join(sessionPath, 'metadata');
 
-  const subPath = join(metadataDir, `subtitles.${dstLang}.srt`);
-  const escapedSub = subPath.replace(/'/g, "'\\\\''").replace(/'/g, "'\\''");
-  ffmpeg(['-i', videoFile, '-i', mixedAudio,
-    '-vf', `subtitles='${escapedSub}':force_style='${style}'`,
-    '-map', '0:v:0', '-map', '1:a:0',
-    '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
-    '-c:a', 'aac', '-movflags', '+faststart', '-shortest',
-    finalVideo], 300_000);
+  const videoFile = join(mediaDir, 'video_source.mp4');
+  const finalVideo = join(mediaDir, 'video_final.mp4');
+
+  if (!existsSync(videoFile)) throw new Error('video_source.mp4 not found');
+
+  let mode = 'dub';
+  try {
+    const info = JSON.parse(readFileSync(join(sessionPath, 'metadata', 'local_info.json'), 'utf-8'));
+    mode = info.mode || 'dub';
+  } catch { /* use default */ }
+
+  if (mode === 'subtitle') {
+    const translationFile = join(metadataDir, 'translation.zh.json');
+    if (!existsSync(translationFile)) throw new Error('translation.zh.json not found');
+    const data = JSON.parse(readFileSync(translationFile, 'utf-8'));
+    const dstLang = dstLangFromTranslation(data.translation);
+    const subPath = join(metadataDir, `subtitles.${dstLang}.srt`);
+    writeSrt(data.translation, dstLang, subPath);
+    const style = probeStyle(videoFile, dstLang);
+    const escapedSub = subPath.replace(/'/g, "'\\\\''").replace(/'/g, "'\\''");
+
+    ffmpeg(['-i', videoFile,
+      '-vf', `subtitles='${escapedSub}':force_style='${style}'`,
+      '-map', '0:v:0', '-map', '0:a:0',
+      '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+      '-c:a', 'copy', '-movflags', '+faststart',
+      finalVideo], 300_000);
+  } else {
+    const dubbingFile = join(tmpDir, 'audio_dubbing.wav');
+    const bgmFile = join(mediaDir, 'audio_bgm.wav');
+    const timingsFile = join(metadataDir, 'timings.json');
+
+    if (!existsSync(dubbingFile)) throw new Error('audio_dubbing.wav not found');
+    if (!existsSync(timingsFile)) throw new Error('timings.json not found');
+
+    const data = JSON.parse(readFileSync(timingsFile, 'utf-8'));
+    const dstLang = dstLangFromTranslation(data.translation);
+    const subPath = join(metadataDir, `subtitles.${dstLang}.srt`);
+    writeSrt(data.translation, dstLang, subPath);
+    const style = probeStyle(videoFile, dstLang);
+    const escapedSub = subPath.replace(/'/g, "'\\\\''").replace(/'/g, "'\\''");
+
+    const mixedAudio = join(tmpDir, 'audio_mixed.m4a');
+    ffmpeg(['-i', dubbingFile, '-i', bgmFile, '-filter_complex',
+      '[0:a]volume=1.0[a0];[1:a]volume=0.30[a1];[a0][a1]amix=inputs=2:duration=longest:normalize=0[aout]',
+      '-map', '[aout]', '-c:a', 'aac', mixedAudio]);
+
+    ffmpeg(['-i', videoFile, '-i', mixedAudio,
+      '-vf', `subtitles='${escapedSub}':force_style='${style}'`,
+      '-map', '0:v:0', '-map', '1:a:0',
+      '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+      '-c:a', 'aac', '-movflags', '+faststart', '-shortest',
+      finalVideo], 300_000);
+  }
 
   await updateStageDB(taskId, 'merge_video', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Merged' });
 

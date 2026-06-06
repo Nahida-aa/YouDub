@@ -122,7 +122,7 @@ def main() -> None:
     output_file.write_text(
         json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
     )
-    print(str(output_file))
+    print(f"ASR_OUTPUT:{output_file}")
 
 
 if __name__ == "__main__":

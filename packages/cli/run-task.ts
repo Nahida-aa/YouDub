@@ -32,7 +32,7 @@ type Command =
 const config = JSON.parse(readFileSync('./config.json', 'utf-8')) as {
 	command?: Command;
 	startTask?: { taskId?: string };
-	createTask?: { youtubeUrl?: string; bilibiliUrl?: string; sourceFile?: string; sourceLang?: string; targetLang?: string };
+	createTask?: { youtubeUrl?: string; bilibiliUrl?: string; sourceFile?: string; sourceLang?: string; targetLang?: string; mode?: string };
 	resumeTask?: { taskId?: string; resumeFrom?: string };
 	rerunStage?: { taskId?: string; stageName?: string };
 	checkVideo?: { taskId?: string };
@@ -131,6 +131,7 @@ switch (cmd) {
 				sourceFile: p.sourceFile,
 				sourceLang: p.sourceLang,
 				targetLang: p.targetLang,
+				mode: p.mode,
 			});
 
 			// Fetch video title via yt-dlp --dump-json (optional)

@@ -5,12 +5,12 @@ import { env } from './env.ts';
 
 export interface TTSEngineConfig {
   runtime: 'ort' | 'pytorch' | 'cloud';
-  device: 'cpu' | 'gpu' | 'webgpu';
+  device: 'cpu' | 'cuda' | 'mps' | 'webgpu';
 }
 
 export interface ASREngineConfig {
   runtime: 'faster-whisper' | 'pytorch';
-  device: 'cpu' | 'gpu';
+  device: 'cpu' | 'cuda' | 'mps';
 }
 
 export interface TranslateEngineConfig {
@@ -20,7 +20,7 @@ export interface TranslateEngineConfig {
 
 export interface SeparateEngineConfig {
   runtime: 'ort' | 'pytorch';
-  device: 'cpu' | 'gpu' | 'webgpu';
+  device: 'cpu' | 'cuda' | 'mps' | 'webgpu';
 }
 
 export interface EnginesConfig {
@@ -38,9 +38,11 @@ export function readEnginesConfig(path?: string): EnginesConfig {
   } catch { /* use defaults */ }
   const e = file.engines ?? {};
   return {
-    tts: { runtime: e.tts?.runtime ?? 'pytorch', device: e.tts?.device ?? 'gpu' },
-    asr: { runtime: e.asr?.runtime ?? 'faster-whisper', device: e.asr?.device ?? 'gpu' },
+    tts: { runtime: e.tts?.runtime ?? 'pytorch', device: e.tts?.device ?? 'cuda' },
+    asr: { runtime: e.asr?.runtime ?? 'pytorch', device: e.asr?.device ?? 'cuda' },
     translate: { apiBase: e.translate?.apiBase ?? env.OPENAI_BASE_URL, model: e.translate?.model ?? env.OPENAI_MODEL },
     separate: { runtime: e.separate?.runtime ?? 'ort', device: e.separate?.device ?? 'cpu' },
   };
 }
+
+
