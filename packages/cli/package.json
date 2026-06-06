@@ -7,8 +7,10 @@
     "run": "bun run-task.ts"
   },
   "dependencies": {
-    "@huggingface/transformers": "^4.2.0",
+    "@repo/config": "workspace:*",
+    "@repo/device": "workspace:*",
     "@repo/shared": "workspace:*",
+    "@repo/voxlab": "workspace:*",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "drizzle-zod": "^0.8.3",

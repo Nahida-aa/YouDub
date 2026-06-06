@@ -1,7 +1,7 @@
 import type { QuerySchema } from 'agnostic-query';
 import { z } from 'zod';
 import type { CookieInfo } from '#/feat/settings/cookie.ts';
-import type { ModelStatus } from '#/ml/voxcpm/load.ts';
+import type { ModelStatus } from '@repo/voxlab';
 import { AppErr, AppError, appErrCode, newErr, type Ret } from '#/ws/errors.ts';
 import type {
 	CollectClientToServerEvents,

@@ -1,7 +1,10 @@
+import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join, basename } from 'node:path';
 import { eq, sql } from 'drizzle-orm';
 import { db } from './../../db/index.ts';
 import { STAGES } from './../../feat/tasks/stages.ts';
 import { taskStages, tasks } from './../../feat/tasks/table.ts';
+import { WORKFOLDER } from './../../config/config.ts';
 
 export function sanitizeText(value: string, fallback = 'untitled'): string {
 	const cleaned = value.replace(/[^\w\u4e00-\u9fff.-]+/g, '_').replace(/_+/g, '_').replace(/^[._]+|[._]+$/g, '');
@@ -24,36 +27,68 @@ export async function findTaskByVideoId(
 	return rows[0]?.id ?? null;
 }
 
-export const createTask = async (url: string, taskId: string) => {
+export async function createTask(params: {
+	url?: string;
+	taskId: string;
+	sourceFile?: string;
+	sourceLang?: string;
+	targetLang?: string;
+}) {
 	const createdAt = nowISO();
-	const { ret, ret1 } = await db.transaction(async (tx) => {
+	let taskUrl = params.url!;
+
+	if (params.sourceFile) {
+		const direction = `${params.sourceLang || 'zh'}-${params.targetLang || 'en'}`;
+		const filename = basename(params.sourceFile);
+		const uploadDir = join(WORKFOLDER, '_uploads', params.taskId);
+		mkdirSync(uploadDir, { recursive: true });
+		copyFileSync(params.sourceFile, join(uploadDir, filename));
+		taskUrl = `local://upload/${params.taskId}?direction=${direction}&filename=${encodeURIComponent(filename)}`;
+
+		// Write local_info.json immediately so session_path-based lookup works
+		const sessionPath = join(WORKFOLDER, params.taskId);
+		mkdirSync(join(sessionPath, 'metadata'), { recursive: true });
+		writeFileSync(join(sessionPath, 'metadata', 'local_info.json'), JSON.stringify({
+			id: params.taskId,
+			title: filename.replace(/\.\w+$/, ''),
+			source: 'local',
+			webpage_url: taskUrl,
+			original_path: params.sourceFile,
+			asr_language: params.sourceLang || 'zh',
+			target_language: params.targetLang || 'en',
+		}, null, 2));
+
+		// Set session_path to flat WORKFOLDER/taskId (no ytdlp metadata available)
+		await db.update(tasks).set({ session_path: join(WORKFOLDER, params.taskId) }).where(eq(tasks.id, params.taskId));
+	}
+
+	const { ret } = await db.transaction(async (tx) => {
 		const ret = await tx
 			.insert(tasks)
 			.values({
-				id: taskId,
-				url,
+				id: params.taskId,
+				url: taskUrl,
 				status: 'queued',
 				current_stage: STAGES[0].name,
 				created_at: createdAt,
 			})
 			.returning();
 
-		const ret1 = await tx
+		await tx
 			.insert(taskStages)
 			.values(
 				STAGES.map((stage) => ({
-					task_id: taskId,
+					task_id: params.taskId,
 					name: stage.name,
 					label: stage.label,
 					status: 'pending',
 				})),
-			)
-			.returning();
+			);
 
-		return { ret, ret1 };
+		return { ret };
 	});
 	return ret;
-};
+}
 
 const STAGE_ORDER_CASE = sql`CASE ${STAGES.map(
 	(s, i) => sql`WHEN ${taskStages.name} = ${s.name} THEN ${i + 1}`,

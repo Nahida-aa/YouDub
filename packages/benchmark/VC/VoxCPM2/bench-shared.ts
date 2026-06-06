@@ -1,8 +1,11 @@
-/** Shared benchmark runner for TS VoxCPM CPU / WebGPU comparison */
-
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { VoxCPM } from '../../../api/src/ml/voxcpm/voxcpm';
+import {
+  createVoxCPM,
+  VoxCPMBackend,
+  writeWav,
+} from '@repo/voxlab';
+import type { TTSBackend, TTSGenerateResult, VoxCPMNodeConfig, VoxCPMPythonConfig } from '@repo/voxlab';
 
 export const RESULTS_DIR = join(__dirname, 'results');
 export const REF_WAV = join(__dirname, 'ref.wav');
@@ -22,9 +25,9 @@ export interface BenchmarkResult {
 }
 
 export const TEXTS: Record<string, string> = {
-  short: 'Hello, how are you?',
-  medium: 'Today is a beautiful day. Let\'s go for a walk in the park and enjoy the sunshine together.',
-  long: 'Artificial intelligence is transforming the way we live and work. From natural language processing to computer vision and autonomous driving, AI technologies have made remarkable progress in recent years. These advances are creating new opportunities and challenges across every industry.',
+  short: '今天天气真不错。',
+  medium: '人工智能正在改变我们的生活和工作方式。从自然语言处理到计算机视觉，AI技术取得了显著进展。',
+  long: '近年来，人工智能技术发展迅速，在自然语言处理、计算机视觉、语音识别等领域都取得了突破性进展。深度学习模型的不断完善，使得AI系统在理解和生成人类语言方面表现出色。同时，大语言模型的出现更是推动了整个行业的变革，为各行各业带来了新的机遇和挑战。未来，随着算力的提升和算法的优化，人工智能将在更多领域发挥重要作用。',
 };
 
 export function round(v: number, d: number): number {
@@ -32,37 +35,70 @@ export function round(v: number, d: number): number {
   return Math.round(v * f) / f;
 }
 
-export async function runBenchmark(ep: 'cpu' | 'webgpu'): Promise<BenchmarkResult[]> {
+export interface BenchmarkConfig {
+  backend: VoxCPMBackend;
+  device?: string;
+  config?: VoxCPMNodeConfig | VoxCPMPythonConfig;
+}
+
+export async function runBenchmark(cfg: BenchmarkConfig): Promise<BenchmarkResult[]> {
   const results: BenchmarkResult[] = [];
+  const label = `${cfg.backend}${cfg.device ? '-' + cfg.device : ''}`;
+
+  mkdirSync(RESULTS_DIR, { recursive: true });
 
   const t0 = performance.now();
-  const model = new VoxCPM(undefined, { executionProvider: ep });
+  const model: TTSBackend = createVoxCPM(cfg.backend, cfg.config);
   await model.load();
   const loadTime = (performance.now() - t0) / 1000;
 
   for (const [textKey, text] of Object.entries(TEXTS)) {
-    console.log(`\n[${ep}] ${textKey}...`);
-    const tGen0 = performance.now();
-    const audio = await model.generate({ text, referenceWavPath: REF_WAV, cfgValue: 2.0 });
-    const genTime = (performance.now() - tGen0) / 1000;
+    console.log(`\n[${label}] ${textKey}...`);
+    const result: TTSGenerateResult = await model.generate({ text, referenceWavPath: REF_WAV, cfgValue: 2.0 });
 
-    const outDur = audio.length / 48000;
+    const loadTimeTotal = loadTime + result.loadTimeSec;
+    const genTime = result.genTimeSec;
+
+    // Save audio
+    const wavPath = join(RESULTS_DIR, `${label}-${textKey}.wav`);
+    writeWav(result.samples, wavPath, 48000);
+
+    const outDur = result.samples.length / 48000;
     const r: BenchmarkResult = {
-      engine: 'typescript',
-      device: ep,
+      engine: cfg.backend,
+      device: cfg.device ?? '',
       text_key: textKey,
       text_len: text.length,
-      load_time_s: round(loadTime, 3),
+      load_time_s: round(loadTimeTotal, 3),
       generate_time_s: round(genTime, 3),
-      total_time_s: round(loadTime + genTime, 3),
-      output_samples: audio.length,
+      total_time_s: round(loadTimeTotal + genTime, 3),
+      output_samples: result.samples.length,
       output_duration_s: round(outDur, 3),
-      auto_patches: Math.ceil(audio.length / 7680),
+      auto_patches: Math.ceil(result.samples.length / 7680),
       rtf: round(genTime / outDur, 3),
     };
     console.log(JSON.stringify(r));
     results.push(r);
   }
 
+  await model.dispose();
   return results;
+}
+
+/** Run all available backends and return combined results */
+export async function runAllBackends(): Promise<Record<string, BenchmarkResult[]>> {
+  const all: Record<string, BenchmarkResult[]> = {};
+  const backends: BenchmarkConfig[] = [
+    { backend: VoxCPMBackend.ORT, device: 'cpu', config: { executionProvider: 'cpu' } },
+    { backend: VoxCPMBackend.PYTORCH, device: 'cpu', config: { python: '/home/aa/repos/learn_ls/YouDub-webui/.venv/bin/python' } },
+  ];
+
+  for (const cfg of backends) {
+    try {
+      all[cfg.backend] = await runBenchmark(cfg);
+    } catch (err) {
+      console.error(`[${cfg.backend}] FAILED:`, err);
+    }
+  }
+  return all;
 }

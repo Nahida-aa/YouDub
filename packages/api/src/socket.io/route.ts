@@ -19,8 +19,7 @@ import type {
 import { applyTransaction, assertCollection } from '#/ws/collect.ts';
 import { errorHandler } from '#/ws/errors.ts';
 import { getTableInfo, tableRegistry } from '#/ws/registry.ts';
-import { downloadVoxCPM } from '../ml/voxcpm/download';
-import { checkVoxCPMStatus } from '../ml/voxcpm/load';
+import { downloadVoxCPM, checkONNXReady } from '@repo/voxlab';
 import { engine, io } from './io.ts';
 
 // 全局任务状态追踪
@@ -61,7 +60,7 @@ io.on('connection', async (socket) => {
 	});
 
 	// 1. 立即检测并同步模型状态
-	const status = await checkVoxCPMStatus();
+	const status = await checkONNXReady();
 	socket.emit('ml:voxcpm:status', status);
 
 	// 2. 如果当前有正在进行的任务，立即同步进度给新连接的客户端
@@ -71,7 +70,7 @@ io.on('connection', async (socket) => {
 
 	// 响应式检测请求
 	socket.on('ml:voxcpm:check', async () => {
-		const status = await checkVoxCPMStatus();
+		const status = await checkONNXReady();
 		socket.emit('ml:voxcpm:status', status);
 	});
 
@@ -85,7 +84,7 @@ io.on('connection', async (socket) => {
 			});
 		}
 
-		const currentStatus = await checkVoxCPMStatus();
+		const currentStatus = await checkONNXReady();
 		if (currentStatus.isReady) {
 			return callback({
 				status: 'success',
@@ -120,7 +119,7 @@ io.on('connection', async (socket) => {
 					io.emit('ml:voxcpm:progress', voxcpmPrepareTask.progress);
 
 					// 更新状态给所有客户端
-					const finalStatus = await checkVoxCPMStatus();
+					const finalStatus = await checkONNXReady();
 					io.emit('ml:voxcpm:status', finalStatus);
 				} catch (error: unknown) {
 					const message =

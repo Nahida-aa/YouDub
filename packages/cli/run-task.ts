@@ -18,6 +18,7 @@ import {
 } from './src/feat/tasks/pipeline-runner.ts';
 import { tasks } from './src/feat/tasks/table.ts';
 import { extractVideoId, isYouTubeUrl } from './src/feat/tasks/validate.ts';
+import { randomUUID } from 'node:crypto';
 
 type Command =
 	| 'startTask'
@@ -25,23 +26,27 @@ type Command =
 	| 'rerunStage'
 	| 'checkVideo'
 	| 'taskStatus'
-	| 'createTask';
+	| 'createTask'
+	| 'deviceInfo';
 
 const config = JSON.parse(readFileSync('./config.json', 'utf-8')) as {
 	command?: Command;
-	taskId?: string;
-	stageName?: string;
-	youtubeUrl?: string;
-	resumeFrom?: string;
+	startTask?: { taskId?: string };
+	createTask?: { youtubeUrl?: string; bilibiliUrl?: string; sourceFile?: string; sourceLang?: string; targetLang?: string };
+	resumeTask?: { taskId?: string; resumeFrom?: string };
+	rerunStage?: { taskId?: string; stageName?: string };
+	checkVideo?: { taskId?: string };
+	taskStatus?: { taskId?: string };
+	deviceInfo?: Record<string, never>;
 };
 
 const cmd: Command = config.command ?? 'startTask';
 
 switch (cmd) {
 	case 'checkVideo': {
-		const taskId = config.taskId;
+		const taskId = config.checkVideo?.taskId;
 		if (!taskId) {
-			console.error('No taskId in config.json');
+			console.error('checkVideo.taskId required in config.json');
 			process.exit(1);
 		}
 		const rows = await db
@@ -70,9 +75,9 @@ switch (cmd) {
 	}
 
 	case 'taskStatus': {
-		const taskId = config.taskId;
+		const taskId = config.taskStatus?.taskId;
 		if (!taskId) {
-			console.error('No taskId in config.json');
+			console.error('taskStatus.taskId required in config.json');
 			process.exit(1);
 		}
 		try {
@@ -85,62 +90,81 @@ switch (cmd) {
 		break;
 	}
 
+	case 'deviceInfo': {
+		const { getDeviceInfo } = await import('@repo/device');
+		const info = await getDeviceInfo();
+		console.log(JSON.stringify(info, null, 2));
+		break;
+	}
+
 	case 'createTask': {
-		const url = config.youtubeUrl;
-		if (!url) {
-			console.error('url required in config.json');
+		const p = config.createTask ?? {};
+		const url = p.youtubeUrl ?? p.bilibiliUrl;
+		if (!url && !p.sourceFile) {
+			console.error('createTask: need youtubeUrl, bilibiliUrl, or sourceFile in config.json');
 			process.exit(1);
 		}
+		const videoId = url ? extractVideoId(url) : randomUUID();
 		try {
-			const videoId = extractVideoId(url);
-			const existing = await findTaskByVideoId(videoId);
-			if (existing) {
-				const row = await db
-					.select()
-					.from(tasks)
-					.where(eq(tasks.id, existing))
-					.limit(1);
-				console.log(
-					JSON.stringify(
-						{ taskId: existing, url, status: 'exists', task: row[0] },
-						null,
-						2,
-					),
-				);
-				break;
+			if (url) {
+				const existing = await findTaskByVideoId(videoId);
+				if (existing) {
+					const row = await db
+						.select()
+						.from(tasks)
+						.where(eq(tasks.id, existing))
+						.limit(1);
+					console.log(
+						JSON.stringify(
+							{ taskId: existing, url, status: 'exists', task: row[0] },
+							null,
+							2,
+						),
+					);
+					break;
+				}
 			}
 
-			const [task] = await createTask(url, videoId);
+			const [task] = await createTask({
+				url,
+				taskId: videoId,
+				sourceFile: p.sourceFile,
+				sourceLang: p.sourceLang,
+				targetLang: p.targetLang,
+			});
 
 			// Fetch video title via yt-dlp --dump-json (optional)
-			try {
-				const infoArgs = ['--dump-json'];
-				if (isYouTubeUrl(url) && existsSync(YOUTUBE_COOKIE_PATH))
-					infoArgs.push('--cookies', YOUTUBE_COOKIE_PATH);
-				if (isYouTubeUrl(url) && env.YTDLP_PROXY_PORT)
-					infoArgs.push('--proxy', `http://127.0.0.1:${env.YTDLP_PROXY_PORT}`);
-				infoArgs.push(url);
-				const infoR = spawnSync('yt-dlp', infoArgs, {
-					stdio: ['pipe', 'pipe', 'pipe'],
-					timeout: 30_000,
-				});
-				if (infoR.status === 0 && infoR.stdout.length > 0) {
-					const info = JSON.parse(infoR.stdout.toString());
-					if (info.title) {
-						await db
-							.update(tasks)
-							.set({ title: info.title })
-							.where(eq(tasks.id, videoId));
-						task.title = info.title;
+			if (url) {
+				try {
+					const infoArgs = ['--dump-json'];
+					if (isYouTubeUrl(url) && existsSync(YOUTUBE_COOKIE_PATH))
+						infoArgs.push('--cookies', YOUTUBE_COOKIE_PATH);
+					if (isYouTubeUrl(url) && env.YTDLP_PROXY_PORT)
+						infoArgs.push('--proxy', `http://127.0.0.1:${env.YTDLP_PROXY_PORT}`);
+					infoArgs.push(url);
+					const infoR = spawnSync('yt-dlp', infoArgs, {
+						stdio: ['pipe', 'pipe', 'pipe'],
+						timeout: 30_000,
+					});
+					if (infoR.status === 0 && infoR.stdout.length > 0) {
+						const info = JSON.parse(infoR.stdout.toString());
+						if (info.title) {
+							await db
+								.update(tasks)
+								.set({ title: info.title })
+								.where(eq(tasks.id, videoId));
+							task.title = info.title;
+						}
 					}
+				} catch {
+					/* title is optional */
 				}
-			} catch {
-				/* title is optional */
 			}
 
+			const displayUrl = url || p.sourceFile || '';
 			console.log(
 				JSON.stringify(
-					{ taskId: videoId, url, status: 'created', task },
+					{ taskId: videoId, url: displayUrl, status: 'created', task },
 					null,
 					2,
 				),
@@ -157,12 +181,12 @@ switch (cmd) {
 	}
 
 	case 'resumeTask': {
-		const taskId = config.taskId;
+		const taskId = config.resumeTask?.taskId;
 		if (!taskId) {
-			console.error('No taskId in config.json');
+			console.error('resumeTask.taskId required in config.json');
 			process.exit(1);
 		}
-		const resumeFrom = config.resumeFrom;
+		const resumeFrom = config.resumeTask?.resumeFrom;
 		const label = resumeFrom ? ` from "${resumeFrom}"` : '';
 		console.log(`[CLI] Resuming pipeline for task ${taskId}${label}...`);
 		try {
@@ -176,10 +200,10 @@ switch (cmd) {
 	}
 
 	case 'rerunStage': {
-		const taskId = config.taskId;
-		const stageName = config.stageName;
+		const taskId = config.rerunStage?.taskId;
+		const stageName = config.rerunStage?.stageName;
 		if (!taskId || !stageName) {
-			console.error('taskId and stageName required in config.json');
+			console.error('rerunStage.taskId and rerunStage.stageName required in config.json');
 			process.exit(1);
 		}
 		console.log(`[CLI] Rerunning stage "${stageName}" for task ${taskId}...`);
@@ -195,9 +219,9 @@ switch (cmd) {
 
 	case 'startTask':
 	default: {
-		const taskId = config.taskId;
+		const taskId = config.startTask?.taskId;
 		if (!taskId) {
-			console.error('No taskId in config.json');
+			console.error('startTask.taskId required in config.json');
 			process.exit(1);
 		}
 		console.log(`[CLI] Starting pipeline for task ${taskId}...`);

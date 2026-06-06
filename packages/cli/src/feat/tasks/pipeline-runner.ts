@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, existsSync, readFileSync, writeFileSync, statSync } from 'node:fs';
+import { appendFileSync, mkdirSync, existsSync, readFileSync, writeFileSync, statSync, readdirSync, rmSync } from 'node:fs';
 import { join, dirname, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { db } from './../../db/index.ts';
@@ -8,9 +8,11 @@ import { STAGES } from './../../feat/tasks/stages.ts';
 import { extractVideoId, isYouTubeUrl } from './../../feat/tasks/validate.ts';
 import { sanitizeText } from './../../feat/tasks/fn.ts';
 import { LOG_DIR, WORKFOLDER, openaiDefaults, REPO_ROOT, YOUTUBE_COOKIE_PATH } from './../../config/config.ts';
+import { readEnginesConfig } from '@repo/config';
+import type { EnginesConfig, TTSEngineConfig } from '@repo/config';
 import { env } from './../../config/env.ts';
 import { Demucs } from './../../ml/demucs/demucs.ts';
-import { VoxCPM } from './../../ml/voxcpm/voxcpm.ts';
+import { VoxCPMNodeONNX, VoxCPMCloud, VoxCPMPython, writeWav, createVoxCPM, VoxCPMBackend } from '@repo/voxlab';
 
 function nowISO(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, '');
@@ -37,6 +39,29 @@ async function updateStageDB(taskId: string, name: string, fields: Record<string
 }
 
 // ── Helpers ──
+const LANG_NAMES: Record<string, string> = {
+	en: 'English', zh: 'Chinese', vi: 'Vietnamese', ja: 'Japanese',
+	ko: 'Korean', fr: 'French', de: 'German', es: 'Spanish',
+	pt: 'Portuguese', ru: 'Russian', ar: 'Arabic', hi: 'Hindi',
+	th: 'Thai', id: 'Indonesian', ms: 'Malay', tl: 'Tagalog',
+	my: 'Burmese', km: 'Khmer', lo: 'Lao', mn: 'Mongolian',
+	ne: 'Nepali', ur: 'Urdu', bn: 'Bengali',
+};
+
+function readTaskLanguages(sessionPath: string): { asrLanguage: string; targetLanguage: string } {
+	const localInfo = join(sessionPath, 'metadata', 'local_info.json');
+	if (existsSync(localInfo)) {
+		try {
+			const info = JSON.parse(readFileSync(localInfo, 'utf-8'));
+			return { asrLanguage: info.asr_language || 'en', targetLanguage: info.target_language || 'zh' };
+		} catch { /* fall through */ }
+	}
+	return { asrLanguage: 'en', targetLanguage: 'zh' };
+}
+
+function translationFilePath(sessionPath: string, lang: string): string {
+	return join(sessionPath, 'metadata', `translation.${lang}.json`);
+}
 function srtTime(ms: number): string {
   const h = Math.floor(ms / 3600000);
   const m = Math.floor((ms % 3600000) / 60000);
@@ -206,9 +231,10 @@ async function stageAsr(taskId: string, sessionPath: string) {
 
   const asrScript = join(REPO_ROOT, 'packages', 'cli', 'scripts', 'asr', 'run.py');
   const pythonBin = join(REPO_ROOT, '.venv', 'bin', 'python');
+  const { asrLanguage } = readTaskLanguages(sessionPath);
 
   // First attempt: GPU (float16), retries on SIGSEGV/SIGABRT with --cpu
-  const args = [asrScript, vocalsPath, sessionAbsPath, 'en'];
+  const args = [asrScript, vocalsPath, sessionAbsPath, asrLanguage];
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const result = spawnSync(pythonBin, attempt === 1 ? [...args, '--cpu'] : args, {
@@ -316,7 +342,10 @@ async function stageAsrFix(taskId: string, sessionPath: string) {
 async function stageTranslate(taskId: string, sessionPath: string) {
   const metadataDir = join(sessionPath, 'metadata');
   const fixedFile = join(metadataDir, 'asr_fixed.json');
-  const translationFile = join(metadataDir, 'translation.zh.json');
+  const { asrLanguage: srcLangCode, targetLanguage: dstLangCode } = readTaskLanguages(sessionPath);
+  const translationFile = translationFilePath(sessionPath, dstLangCode);
+  const srcLangName = LANG_NAMES[srcLangCode] || srcLangCode;
+  const dstLangName = LANG_NAMES[dstLangCode] || dstLangCode;
 
   if (existsSync(translationFile) && existsSync(fixedFile) && statSync(fixedFile).mtimeMs <= statSync(translationFile).mtimeMs) {
     await updateStageDB(taskId, 'translate', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Already translated' });
@@ -334,8 +363,10 @@ async function stageTranslate(taskId: string, sessionPath: string) {
     meta = JSON.parse(readFileSync(join(metadataDir, 'ytdlp_info.json'), 'utf-8'));
   } catch { /* ignore */ }
 
-  const api = openaiDefaults();
-  if (!api.apiKey) throw new Error('OPENAI_API_KEY not configured');
+  const enginesCfg = readEnginesConfig();
+  const apiKey = env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY not configured');
+  const api = { baseUrl: enginesCfg.translate.apiBase, apiKey, model: enginesCfg.translate.model, translateConcurrency: env.OPENAI_TRANSLATE_CONCURRENCY };
 
   const metaView = {
     title: (meta.title || '').trim().slice(0, 500) || '(unknown)',
@@ -345,8 +376,8 @@ async function stageTranslate(taskId: string, sessionPath: string) {
 
   // Preprocess: one call to get summary, hotwords, corrections
   const preprocessPrompt = `你为视频字幕翻译做预处理。请阅读视频元信息和完整转录文本，输出 JSON。
-转录原始语言：English
-目标译文语言：中文
+转录原始语言：${srcLangName}
+目标译文语言：${dstLangName}
 
 # 输出 JSON 格式（严格遵守）
 {
@@ -403,7 +434,7 @@ ${fullText.slice(0, 10000)}`;
   const hotwordsStr = hotwords.length ? hotwords.join('\n') : '(none)';
   const correctionsStr = corrections.length ? corrections.join('\n') : '(none)';
 
-  const translateSystem = `你是一个专业的中文翻译助手。请将英文逐句翻译成中文。
+  const translateSystem = `你是一个专业的${dstLangName}翻译助手。请将${srcLangName}逐句翻译成${dstLangName}。
 
 # 元信息
 视频标题：${metaView.title}
@@ -448,8 +479,8 @@ ${correctionsStr}
   const translation = utterances.map((u: any, idx: number) => ({
     src: texts[idx],
     dst: dsts[idx]?.replace(/——/g, '，') || '',
-    src_lang: 'en',
-    dst_lang: 'zh',
+    src_lang: srcLangCode,
+    dst_lang: dstLangCode,
     start_time: u.start_time,
     end_time: u.end_time,
     speaker: '1',
@@ -462,14 +493,20 @@ ${correctionsStr}
 // ── Stage 6: split_audio ──
 async function stageSplitAudio(taskId: string, sessionPath: string) {
   const vocalsFile = join(sessionPath, 'media', 'audio_vocals.wav');
-  const translationFile = join(sessionPath, 'metadata', 'translation.zh.json');
+  const { targetLanguage: dstLangCode } = readTaskLanguages(sessionPath);
+  const translationFile = translationFilePath(sessionPath, dstLangCode);
 
-  if (!existsSync(vocalsFile)) throw new Error('audio_vocals.wav not found');
-  if (!existsSync(translationFile)) throw new Error('translation.zh.json not found');
+  if (!existsSync(translationFile)) throw new Error(`${translationFile} not found`);
 
   const data = JSON.parse(readFileSync(translationFile, 'utf-8'));
   const segmentsDir = join(sessionPath, 'segments', 'vocals');
   mkdirSync(segmentsDir, { recursive: true });
+
+  // If translation changed, all segments are stale
+  const anySeg = readdirSync(segmentsDir).find(f => f.endsWith('.wav'));
+  if (anySeg && statSync(translationFile).mtimeMs > statSync(join(segmentsDir, anySeg)).mtimeMs) {
+    for (const f of readdirSync(segmentsDir)) rmSync(join(segmentsDir, f));
+  }
 
   // Get total audio duration for clamping
   const probe = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', vocalsFile], { stdio: ['pipe', 'pipe', 'pipe'] });
@@ -495,17 +532,38 @@ async function stageSplitAudio(taskId: string, sessionPath: string) {
   await updateStageDB(taskId, 'split_audio', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Split' });
 }
 
+function createTTSBackend(cfg: TTSEngineConfig) {
+  if (cfg.runtime === 'cloud') return new VoxCPMCloud();
+  if (cfg.runtime === 'pytorch') return new VoxCPMPython();
+  const device = cfg.device === 'webgpu' ? 'webgpu' : 'cpu';
+  return new VoxCPMNodeONNX({ executionProvider: device });
+}
+
 // ── Stage 7: tts (VoxCPM) ──
 async function stageTts(taskId: string, sessionPath: string) {
-  const translationFile = resolve(REPO_ROOT, sessionPath, 'metadata', 'translation.zh.json');
+  const engines = readEnginesConfig();
+  const { targetLanguage: dstLangCode } = readTaskLanguages(sessionPath);
+  const translationFile = resolve(REPO_ROOT, sessionPath, 'metadata', `translation.${dstLangCode}.json`);
   const vocalsDir = resolve(REPO_ROOT, sessionPath, 'segments', 'vocals');
   const ttsDir = resolve(REPO_ROOT, sessionPath, 'segments', 'tts');
 
-  if (!existsSync(translationFile)) throw new Error('translation.zh.json not found');
+  if (!existsSync(translationFile)) throw new Error(`${translationFile} not found`);
   mkdirSync(ttsDir, { recursive: true });
 
   const data = JSON.parse(readFileSync(translationFile, 'utf-8'));
   const translation = data.translation;
+
+  // If translation changed, all TTS outputs are stale
+  const anyTts = readdirSync(ttsDir).find(f => f.endsWith('.wav'));
+  if (anyTts && statSync(translationFile).mtimeMs > statSync(join(ttsDir, anyTts)).mtimeMs) {
+    for (const f of readdirSync(ttsDir)) rmSync(join(ttsDir, f));
+    // Cascade: delete downstream merge_audio outputs
+    const sessionAbs = resolve(REPO_ROOT, sessionPath);
+    const dubbingFile = join(sessionAbs, 'tmp', 'audio_dubbing.wav');
+    const timingsFile = join(sessionAbs, 'metadata', 'timings.json');
+    const finalVideo = join(sessionAbs, 'media', 'video_final.mp4');
+    for (const f of [dubbingFile, timingsFile, finalVideo]) { if (existsSync(f)) rmSync(f); }
+  }
 
   let fallbackRef = '';
   for (let i = 0; i < translation.length; i++) {
@@ -517,7 +575,8 @@ async function stageTts(taskId: string, sessionPath: string) {
     }
   }
 
-  const voxcpm = new VoxCPM(undefined, { executionProvider: 'webgpu' });
+  const ttsCfg = engines.tts;
+  const voxcpm = createTTSBackend(ttsCfg);
   await voxcpm.load();
 
   for (let i = 0; i < translation.length; i++) {
@@ -544,40 +603,18 @@ async function stageTts(taskId: string, sessionPath: string) {
 
     await updateStageDB(taskId, 'tts', { last_message: `Generating ${i + 1}/${translation.length}...` });
 
-    const audio = await voxcpm.generate({ text, referenceWavPath: refWav });
+    const { samples: audio } = await voxcpm.generate({ text, referenceWavPath: refWav });
     writeWav(audio, outPath, 48000);
   }
 
+  await voxcpm.dispose();
   await updateStageDB(taskId, 'tts', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'TTS done' });
-}
-
-function writeWav(samples: Float32Array, filePath: string, sampleRate: number) {
-  const buf = new ArrayBuffer(44 + samples.length * 2);
-  const dv = new DataView(buf);
-  const writeStr = (off: number, s: string) => { for (let i = 0; i < s.length; i++) dv.setUint8(off + i, s.charCodeAt(i)); };
-  writeStr(0, 'RIFF');
-  dv.setUint32(4, 36 + samples.length * 2, true);
-  writeStr(8, 'WAVE');
-  writeStr(12, 'fmt ');
-  dv.setUint32(16, 16, true);
-  dv.setUint16(20, 1, true);
-  dv.setUint16(22, 1, true);
-  dv.setUint32(24, sampleRate, true);
-  dv.setUint32(28, sampleRate * 2, true);
-  dv.setUint16(32, 2, true);
-  dv.setUint16(34, 16, true);
-  writeStr(36, 'data');
-  dv.setUint32(40, samples.length * 2, true);
-  for (let i = 0; i < samples.length; i++) {
-    const s = Math.max(-32768, Math.min(32767, Math.round(samples[i] * 32768)));
-    dv.setInt16(44 + i * 2, s, true);
-  }
-  writeFileSync(filePath, new Uint8Array(buf));
 }
 
 // ── Stage 8: merge_audio ──
 async function stageMergeAudio(taskId: string, sessionPath: string) {
-  const translationFile = join(sessionPath, 'metadata', 'translation.zh.json');
+  const { targetLanguage: dstLangCode } = readTaskLanguages(sessionPath);
+  const translationFile = translationFilePath(sessionPath, dstLangCode);
   const ttsDir = join(sessionPath, 'segments', 'tts');
   const tmpDir = join(sessionPath, 'tmp');
   const stretchedDir = join(sessionPath, 'segments', 'stretched');
@@ -980,6 +1017,41 @@ export async function rerunSingleStage(taskId: string, stageName: string) {
   emitLog(taskId, `[Pipeline] Stage ${stageName} completed`);
 }
 
+function msDiff(a: string | null, b: string | null): number | null {
+  if (!a || !b) return null;
+  return Math.max(0, new Date(a).getTime() - new Date(b).getTime());
+}
+
+function fmtDuration(ms: number | null): string {
+  if (ms == null) return '—';
+  if (ms < 1000) return `${ms}ms`;
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  return `${Math.floor(s / 60)}m${s % 60}s`;
+}
+
+function buildSummary(stages: ReturnType<typeof enrichStage>[], task: typeof tasks.$inferSelect): string {
+  const done = stages.filter(s => s.status === 'completed').length;
+  const total = stages.length;
+  const elapsedMs = msDiff(new Date().toISOString(), task.created_at);
+  const elapsed = fmtDuration(elapsedMs);
+  const stage = stages.find(s => s.status === 'running');
+  const stageInfo = stage
+    ? ` @ ${stage.label} (${stage.progress ?? 0}%)`
+    : '';
+  return task.status === 'completed'
+    ? `✅ completed in ${elapsed}`
+    : `${task.status}${stageInfo} — ${done}/${total} stages done, elapsed ${elapsed}`;
+}
+
+function enrichStage(s: { name: string; label: string; status: string; progress: number | null; last_message: string | null; error_message: string | null; started_at: string | null; completed_at: string | null }) {
+  return {
+    ...s,
+    progress: s.progress ?? 0,
+    duration_ms: msDiff(s.completed_at, s.started_at),
+  };
+}
+
 export async function getStageStatuses(taskId: string) {
   const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId));
   if (!task) throw new Error(`Task ${taskId} not found`);
@@ -999,7 +1071,7 @@ export async function getStageStatuses(taskId: string) {
     .where(eq(taskStages.task_id, taskId));
 
   const stageMap = new Map(rows.map(r => [r.name, r]));
-  const stages = STAGES.map(s => stageMap.get(s.name) ?? { name: s.name, label: s.label, status: 'pending', progress: 0, last_message: null, error_message: null, started_at: null, completed_at: null });
+  const stages = STAGES.map(s => enrichStage(stageMap.get(s.name) ?? { name: s.name, label: s.label, status: 'pending', progress: 0, last_message: null, error_message: null, started_at: null, completed_at: null }));
 
   return {
     taskId,
@@ -1007,7 +1079,13 @@ export async function getStageStatuses(taskId: string) {
     title: task.title,
     status: task.status,
     current_stage: task.current_stage,
+    created_at: task.created_at,
+    started_at: task.started_at,
+    completed_at: task.completed_at,
+    session_path: task.session_path,
+    final_video_path: task.final_video_path,
     error_message: task.error_message,
     stages,
+    summary: buildSummary(stages, task),
   };
 }

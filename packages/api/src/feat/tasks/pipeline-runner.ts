@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, existsSync, readFileSync, writeFileSync, statSync } from 'node:fs';
+import { appendFileSync, mkdirSync, existsSync, readFileSync, writeFileSync, statSync, readdirSync, rmSync } from 'node:fs';
 import { join, dirname, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { db } from '#/db/index.ts';
@@ -9,10 +9,12 @@ import { STAGES } from '#/feat/tasks/stages.ts';
 import { extractVideoId, isYouTubeUrl } from '#/feat/tasks/validate.ts';
 import { sanitizeText } from '#/feat/tasks/fn.ts';
 import { LOG_DIR, REPO_ROOT, SESSION_DIR, WORKFOLDER, openaiDefaults, YOUTUBE_COOKIE_PATH } from '#/config/config.ts';
+import { readEnginesConfig } from '@repo/config';
+import type { EnginesConfig, TTSEngineConfig } from '@repo/config';
 import { env } from '#/config/env.ts';
 import { Demucs } from '#/ml/demucs/demucs.ts';
 import { transcribe as whisperTranscribe } from '#/ml/whisper/whisper.ts';
-import { VoxCPM } from '#/ml/voxcpm/voxcpm.ts';
+import { VoxCPMNodeONNX, VoxCPMCloud, VoxCPMPython, writeWav } from '@repo/voxlab';
 
 function nowISO(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, '');
@@ -325,8 +327,10 @@ async function stageTranslate(taskId: string, sessionPath: string) {
     meta = JSON.parse(readFileSync(join(metadataDir, 'ytdlp_info.json'), 'utf-8'));
   } catch { /* ignore */ }
 
-  const api = openaiDefaults();
-  if (!api.apiKey) throw new Error('OPENAI_API_KEY not configured');
+  const enginesCfg = readEnginesConfig();
+  const apiKey = env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY not configured');
+  const api = { baseUrl: enginesCfg.translate.apiBase, apiKey, model: enginesCfg.translate.model, translateConcurrency: env.OPENAI_TRANSLATE_CONCURRENCY };
 
   const metaView = {
     title: (meta.title || '').trim().slice(0, 500) || '(unknown)',
@@ -462,6 +466,12 @@ async function stageSplitAudio(taskId: string, sessionPath: string) {
   const segmentsDir = join(sessionPath, 'segments', 'vocals');
   mkdirSync(segmentsDir, { recursive: true });
 
+  // If translation changed, all segments are stale
+  const anySeg = readdirSync(segmentsDir).find(f => f.endsWith('.wav'));
+  if (anySeg && statSync(translationFile).mtimeMs > statSync(join(segmentsDir, anySeg)).mtimeMs) {
+    for (const f of readdirSync(segmentsDir)) rmSync(join(segmentsDir, f));
+  }
+
   // Get total audio duration for clamping
   const probe = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', vocalsFile], { stdio: ['pipe', 'pipe', 'pipe'] });
   const totalMs = Math.floor(parseFloat(probe.stdout.toString().trim()) * 1000) || 0;
@@ -486,8 +496,16 @@ async function stageSplitAudio(taskId: string, sessionPath: string) {
   await updateStageDB(taskId, 'split_audio', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Split' });
 }
 
+function createTTSBackend(cfg: TTSEngineConfig) {
+  if (cfg.runtime === 'cloud') return new VoxCPMCloud();
+  if (cfg.runtime === 'pytorch') return new VoxCPMPython();
+  const device = cfg.device === 'webgpu' ? 'webgpu' : 'cpu';
+  return new VoxCPMNodeONNX({ executionProvider: device });
+}
+
 // ── Stage 7: tts (VoxCPM) ──
 async function stageTts(taskId: string, sessionPath: string) {
+  const engines = readEnginesConfig();
   const translationFile = join(sessionPath, 'metadata', 'translation.zh.json');
   const vocalsDir = join(sessionPath, 'segments', 'vocals');
   const ttsDir = join(sessionPath, 'segments', 'tts');
@@ -497,6 +515,17 @@ async function stageTts(taskId: string, sessionPath: string) {
 
   const data = JSON.parse(readFileSync(translationFile, 'utf-8'));
   const translation = data.translation;
+
+  // If translation changed, all TTS outputs are stale
+  const anyTts = readdirSync(ttsDir).find(f => f.endsWith('.wav'));
+  if (anyTts && statSync(translationFile).mtimeMs > statSync(join(ttsDir, anyTts)).mtimeMs) {
+    for (const f of readdirSync(ttsDir)) rmSync(join(ttsDir, f));
+    // Cascade: delete downstream merge_audio outputs
+    const dubbingFile = join(sessionPath, 'tmp', 'audio_dubbing.wav');
+    const timingsFile = join(sessionPath, 'metadata', 'timings.json');
+    const finalVideo = join(sessionPath, 'media', 'video_final.mp4');
+    for (const f of [dubbingFile, timingsFile, finalVideo]) { if (existsSync(f)) rmSync(f); }
+  }
 
   // Find a fallback reference: any vocal segment >= 1200ms
   let fallbackRef = '';
@@ -509,7 +538,7 @@ async function stageTts(taskId: string, sessionPath: string) {
     }
   }
 
-  const voxcpm = new VoxCPM(undefined, { executionProvider: 'webgpu' });
+  const voxcpm = createTTSBackend(engines.tts);
   await voxcpm.load();
 
   for (let i = 0; i < translation.length; i++) {
@@ -537,35 +566,12 @@ async function stageTts(taskId: string, sessionPath: string) {
 
     await updateStageDB(taskId, 'tts', { last_message: `Generating ${i + 1}/${translation.length}...` });
 
-    const audio = await voxcpm.generate({ text, referenceWavPath: refWav });
+    const { samples: audio } = await voxcpm.generate({ text, referenceWavPath: refWav });
     writeWav(audio, outPath, 48000);
   }
 
+  await voxcpm.dispose();
   await updateStageDB(taskId, 'tts', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'TTS done' });
-}
-
-function writeWav(samples: Float32Array, filePath: string, sampleRate: number) {
-  const buf = new ArrayBuffer(44 + samples.length * 2);
-  const dv = new DataView(buf);
-  const writeStr = (off: number, s: string) => { for (let i = 0; i < s.length; i++) dv.setUint8(off + i, s.charCodeAt(i)); };
-  writeStr(0, 'RIFF');
-  dv.setUint32(4, 36 + samples.length * 2, true);
-  writeStr(8, 'WAVE');
-  writeStr(12, 'fmt ');
-  dv.setUint32(16, 16, true);
-  dv.setUint16(20, 1, true);
-  dv.setUint16(22, 1, true);
-  dv.setUint32(24, sampleRate, true);
-  dv.setUint32(28, sampleRate * 2, true);
-  dv.setUint16(32, 2, true);
-  dv.setUint16(34, 16, true);
-  writeStr(36, 'data');
-  dv.setUint32(40, samples.length * 2, true);
-  for (let i = 0; i < samples.length; i++) {
-    const s = Math.max(-32768, Math.min(32767, Math.round(samples[i] * 32768)));
-    dv.setInt16(44 + i * 2, s, true);
-  }
-  writeFileSync(filePath, new Uint8Array(buf));
 }
 
 // ── Stage 8: merge_audio ──

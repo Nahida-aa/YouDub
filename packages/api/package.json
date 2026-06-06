@@ -13,8 +13,10 @@
   },
   "dependencies": {
     "@hono/zod-validator": "^0.8.0",
-    "@huggingface/transformers": "^4.2.0",
+    "@repo/config": "workspace:*",
+    "@repo/device": "workspace:*",
     "@repo/shared": "workspace:*",
+    "@repo/voxlab": "workspace:*",
     "@socket.io/bun-engine": "^0.1.1",
     "@types/cors": "^2.8.19",
     "agnostic-query": "1.10.5",
