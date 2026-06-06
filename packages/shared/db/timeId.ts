@@ -21,9 +21,6 @@ function getRandomValues(length: number): Uint8Array {
 	if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
 		return crypto.getRandomValues(new Uint8Array(length));
 	}
-	if (typeof require !== 'undefined') {
-		return require('node:crypto').webcrypto.getRandomValues(new Uint8Array(length));
-	}
 	throw new Error('crypto.getRandomValues is not available');
 }
 
@@ -69,7 +66,9 @@ export function timeId(options?: TimeIdOptions): string {
 	if (now === lastTime) {
 		counter++;
 		if (counter >= base * base) {
-			while (Date.now() === lastTime) { /* spin to next ms */ }
+			while (Date.now() === lastTime) {
+				/* spin to next ms */
+			}
 			now = Date.now();
 			counter = 0;
 		}
@@ -80,14 +79,21 @@ export function timeId(options?: TimeIdOptions): string {
 
 	const ts = encode(now, alphabet);
 	if (ts.length > size) {
-		throw new Error(`size ${size} is too small for timestamp prefix (${ts.length})`);
+		throw new Error(
+			`size ${size} is too small for timestamp prefix (${ts.length})`,
+		);
 	}
 
 	const randomLen = size - ts.length;
 	if (randomLen < 2) {
-		throw new Error(`size ${size} leaves no room for 2-char counter plus random`);
+		throw new Error(
+			`size ${size} leaves no room for 2-char counter plus random`,
+		);
 	}
 
-	return ts + encode(counter, alphabet).padStart(2, alphabet[0]) +
-		(randomLen > 2 ? randomString(randomLen - 2, alphabet) : '');
+	return (
+		ts +
+		encode(counter, alphabet).padStart(2, alphabet[0]) +
+		(randomLen > 2 ? randomString(randomLen - 2, alphabet) : '')
+	);
 }

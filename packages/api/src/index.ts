@@ -1,10 +1,17 @@
-// import { websocket } from 'hono/bun';
 import { engine } from '#/socket.io/route.ts';
+import { start } from '#/feat/tasks/worker.ts';
+import { runPipeline } from '#/feat/tasks/pipeline-runner.ts';
+import { ensureRuntimeDirs } from '#/config/config.ts';
 
-// import { io } from '#/ws/route.ts';
+ensureRuntimeDirs();
+
 const io = engine.handler();
 
 import app from './app';
+
+// Register the pipeline runner on startup
+start(runPipeline);
+console.log('[Pipeline] Runner registered');
 
 export default Bun.serve({
 	port: 9007,
@@ -14,10 +21,7 @@ export default Bun.serve({
 		if (req.url.includes('/ws/')) {
 			return io.fetch(req, server);
 		}
-		// 其他请求交给 Hono
 		return app.fetch(req, server);
 	},
-	// websocket,
 	websocket: io.websocket,
-	// maxRequestBodySize: socketIo.maxRequestBodySize,
 });

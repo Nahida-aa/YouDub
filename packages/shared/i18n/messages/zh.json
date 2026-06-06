@@ -9,7 +9,7 @@
   "example_message": "欢迎来到你的 i18n 应用",
   "language_label": "语言",
   "current_locale": "当前语言: {locale}",
-  "learn_router": "学习 Paraglide JS",
+  "SAVED_COOKIE_SENTINEL": "已保存 Cookie（点击可修改）",
   "en": "English",
   "zh": "中文",
   "es": "Español",

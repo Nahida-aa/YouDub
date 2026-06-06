@@ -5,7 +5,7 @@ import { cva } from 'class-variance-authority';
 import type { JSX, ValidComponent } from 'solid-js';
 import { splitProps } from 'solid-js';
 
-export type SelectProps<T extends { value: string; label: string }> =
+export type SelectProps<T extends { value: string; label: string } | string> =
 	SelectPrimitive.SelectRootProps<T>;
 const Select = SelectPrimitive.Root;
 const SelectValue = SelectPrimitive.Value;
@@ -27,7 +27,7 @@ const SelectTrigger = <T extends ValidComponent = 'button'>(
 	return (
 		<SelectPrimitive.Trigger
 			class={cn(
-				'flex h-10 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+				'flex h-10 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
 				local.class,
 			)}
 			{...others}
@@ -67,7 +67,7 @@ const SelectContent = <T extends ValidComponent = 'div'>(
 				)}
 				{...others}
 			>
-				<SelectPrimitive.Listbox class="m-0 p-1" />
+				<SelectPrimitive.Listbox class="m-0 p-1 overflow-y-auto" />
 			</SelectPrimitive.Content>
 		</SelectPrimitive.Portal>
 	);

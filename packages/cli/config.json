@@ -1,0 +1,22 @@
+{
+  "command": "createTask",
+  "createTask": {
+    "sourceFile": "/home/aa/下载/14.mp4",
+    "sourceLang": "zh",
+    "targetLang": "vi"
+  },
+  "engines": {
+    "separate": {
+      "runtime": "ort",
+      "device": "cpu"
+    },
+    "asr": {
+      "runtime": "faster-whisper",
+      "device": "gpu"
+    },
+    "tts": {
+      "runtime": "pytorch",
+      "device": "cpu"
+    }
+  }
+}

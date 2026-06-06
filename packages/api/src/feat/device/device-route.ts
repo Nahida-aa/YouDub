@@ -1,9 +1,7 @@
 import { Hono } from 'hono';
-import { getDeviceInfo } from './device-info';
+import { getDeviceInfo } from '@repo/device';
 
-const deviceRoute = new Hono();
-
-deviceRoute.get('/device/info', async (c) => {
+const deviceRoute = new Hono().get('/deviceInfo', async (c) => {
 	const info = await getDeviceInfo();
 	return c.json(info);
 });

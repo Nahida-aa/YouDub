@@ -41,33 +41,10 @@ export function assertCollection(id: string): asserts id is CollectionId {
 	}
 }
 
-function applyInsert(data: Record<string, unknown>) {
-	const row = toTaskInsert(data);
-	if (!row.id) {
-		throw new Error('Task insert requires an id');
-	}
-	db.insert(tasks)
-		.values(row as TaskInsert)
-		.onConflictDoUpdate({
-			target: tasks.id,
-			set: row,
-		});
-}
-
-function applyUpdate(id: string, data: Record<string, unknown>) {
-	const row = toTaskInsert(data);
-	if (Object.keys(row).length === 0) {
-		return;
-	}
-	db.update(tasks).set(row).where(eq(tasks.id, id));
-}
-
-function applyDelete(id: string) {
-	db.delete(tasks).where(eq(tasks.id, id));
-}
-
 const CONFLICT_SET = Object.fromEntries(
-	[...TASK_COLUMNS].filter((c) => c !== 'id').map((col) => [col, sql.raw(`excluded.${col}`)]),
+	[...TASK_COLUMNS]
+		.filter((c) => c !== 'id')
+		.map((col) => [col, sql.raw(`excluded.${col}`)]),
 );
 
 export function applyTransaction(payload: TransactionPayload) {
@@ -79,7 +56,11 @@ export function applyTransaction(payload: TransactionPayload) {
 					throw new Error('Insert mutation requires row data');
 				}
 				tx.insert(tasks)
-					.values(toTaskInsert(mutation.data as Record<string, unknown>) as TaskInsert)
+					.values(
+						toTaskInsert(
+							mutation.data as Record<string, unknown>,
+						) as TaskInsert,
+					)
 					.onConflictDoUpdate({
 						target: tasks.id,
 						set: CONFLICT_SET,
@@ -105,4 +86,3 @@ export function applyTransaction(payload: TransactionPayload) {
 		}
 	});
 }
-

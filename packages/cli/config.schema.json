@@ -1,0 +1,152 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "YouDub CLI Config",
+  "type": "object",
+  "properties": {
+    "command": {
+      "type": "string",
+      "enum": ["startTask", "resumeTask", "rerunStage", "checkVideo", "taskStatus", "createTask", "deviceInfo"],
+      "description": "要执行的命令"
+    },
+    "startTask": {
+      "type": "object",
+      "description": "startTask 参数",
+      "properties": {
+        "taskId": { "type": "string", "description": "任务 ID（videoId）" }
+      },
+      "required": ["taskId"],
+      "additionalProperties": false
+    },
+    "createTask": {
+      "type": "object",
+      "description": "createTask 参数",
+      "properties": {
+        "youtubeUrl": { "type": "string", "format": "uri", "description": "YouTube URL" },
+        "bilibiliUrl": { "type": "string", "format": "uri", "description": "Bilibili URL" },
+        "sourceFile": { "type": "string", "description": "本地视频文件路径" },
+        "sourceLang": { "type": "string", "description": "源语言，如 zh, en", "default": "zh" },
+        "targetLang": { "type": "string", "description": "目标语言，如 en, ja, vi(越南语)", "default": "en" }
+      },
+      "additionalProperties": false
+    },
+    "resumeTask": {
+      "type": "object",
+      "description": "resumeTask 参数",
+      "properties": {
+        "taskId": { "type": "string", "description": "任务 ID（videoId）" },
+        "resumeFrom": { "type": "string", "enum": ["download", "separate", "asr", "asr_fix", "translate", "split_audio", "tts", "merge_audio", "merge_video"], "description": "从此 stage 开始重跑（含该 stage），之前的 stages 保留不变" }
+      },
+      "required": ["taskId"],
+      "additionalProperties": false
+    },
+    "rerunStage": {
+      "type": "object",
+      "description": "rerunStage 参数",
+      "properties": {
+        "taskId": { "type": "string", "description": "任务 ID（videoId）" },
+        "stageName": { "type": "string", "enum": ["download", "separate", "asr", "asr_fix", "translate", "split_audio", "tts", "merge_audio", "merge_video"], "description": "要重跑的 stage 名称" }
+      },
+      "required": ["taskId", "stageName"],
+      "additionalProperties": false
+    },
+    "checkVideo": {
+      "type": "object",
+      "description": "checkVideo 参数",
+      "properties": {
+        "taskId": { "type": "string", "description": "任务 ID（videoId）" }
+      },
+      "required": ["taskId"],
+      "additionalProperties": false
+    },
+    "taskStatus": {
+      "type": "object",
+      "description": "taskStatus 参数",
+      "properties": {
+        "taskId": { "type": "string", "description": "任务 ID（videoId）" }
+      },
+      "required": ["taskId"],
+      "additionalProperties": false
+    },
+    "deviceInfo": {
+      "type": "object",
+      "description": "deviceInfo 无需额外参数",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "engines": {
+      "type": "object",
+      "description": "各 stage 的引擎配置",
+      "properties": {
+        "separate": {
+          "type": "object",
+          "description": "人声分离引擎 (Demucs)",
+          "properties": {
+            "runtime": {
+              "type": "string",
+              "enum": ["ort", "pytorch"],
+              "description": "运行时: ort (onnxruntime-node, RTF ~1.0), pytorch (Python子进程, RTF ~2.0)"
+            },
+            "device": {
+              "type": "string",
+              "enum": ["cpu", "gpu", "webgpu"],
+              "description": "不填则自动检测: cpu, gpu (pytorch 映射为 cuda; ROCm 下 cuda 通过 HIP 层兼容), webgpu (仅 ort)"
+            }
+          },
+          "required": ["runtime"]
+        },
+        "asr": {
+          "type": "object",
+          "description": "语音识别引擎",
+          "properties": {
+            "runtime": {
+              "type": "string",
+              "enum": ["faster-whisper", "openai-whisper"],
+              "description": "运行时: faster-whisper (CTranslate2, 安装时需选 CUDA 或 ROCm 对应 wheel), openai-whisper (PyTorch)"
+            },
+            "device": {
+              "type": "string",
+              "enum": ["cpu", "gpu"],
+              "description": "不填则自动检测: cpu, gpu (pytorch 映射为 cuda; ROCm 下 cuda 通过 HIP 层兼容)"
+            }
+          },
+          "required": ["runtime"]
+        },
+        "translate": {
+          "type": "object",
+          "properties": {
+            "apiBase": {
+              "type": "string",
+              "format": "uri",
+              "description": "API端点 base URL, 如 https://api.openai.com/v1"
+            },
+            "model": {
+              "type": "string",
+              "description": "模型名，如 gpt-4o-mini, deepseek-chat"
+            }
+          },
+          "description": "翻译引擎(OpenAI兼容API);默认从 OPENAI_BASE_URL / OPENAI_MODEL 环境变量读取"
+        },
+        "tts": {
+          "type": "object",
+          "description": "语音合成引擎",
+          "properties": {
+            "runtime": {
+              "type": "string",
+              "enum": ["ort", "pytorch", "cloud"],
+              "default": "pytorch",
+              "description": "运行时: ort (onnxruntime-node), pytorch (Python子进程), cloud (远程API)"
+            },
+            "device": {
+              "type": "string",
+              "enum": ["cpu", "gpu", "webgpu"],
+              "default": "gpu",
+              "description": "不填则自动检测: cpu, gpu (pytorch 映射为 cuda; ROCm 下 cuda 通过 HIP 层兼容), webgpu (仅 ort)"
+            }
+          },
+          "required": ["runtime"]
+        }
+      }
+    }
+  },
+  "required": ["command"]
+}

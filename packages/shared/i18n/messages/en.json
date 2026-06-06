@@ -9,7 +9,7 @@
   "example_message": "Welcome to your i18n app.",
   "language_label": "Language",
   "current_locale": "Current locale: {locale}",
-  "learn_router": "Learn Paraglide JS",
+  "SAVED_COOKIE_SENTINEL": "__YOUDUB_SAVED_COOKIE__",
   "en": "English",
   "zh": "中文",
   "fr": "Français",

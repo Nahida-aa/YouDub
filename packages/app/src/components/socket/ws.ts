@@ -1,7 +1,7 @@
 import type {
 	ClientToServerEvents,
 	ServerToClientEvents,
-} from '@repo/api/src/ws/types';
+} from '@repo/api/src/socket.io/types';
 
 // 注意：这里连接的是你的 Hono API (packages/api)
 // 即使后端是 Hono 的 WebSocket，socket.io-client 也可以在特定配置下工作，

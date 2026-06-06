@@ -14,10 +14,7 @@ export const tableRegistry = {
 	},
 };
 export const validate = createQuerySchema();
-type TableInfo<T extends TableName> = {
-	dbTable: (typeof tableRegistry)[T]['dbTable'];
-	validate: (typeof tableRegistry)[T]['validate'];
-};
+
 export type TableName = keyof typeof tableRegistry;
 
 export const getTableInfo = <T extends TableName>(table: T) => {

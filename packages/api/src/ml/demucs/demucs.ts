@@ -187,10 +187,24 @@ export class Demucs {
     const sampleRate = buf.readUInt32LE(24);
     const numChannels = buf.readUInt16LE(22);
     const bitsPerSample = buf.readUInt16LE(34);
-    const dataSize = buf.readUInt32LE(40);
-    const dataStart = 44;
-    const dataLength = dataSize > 0 ? dataSize : buf.length - dataStart;
-    const numSamples = dataLength / (bitsPerSample / 8);
+    const bytesPerSample = bitsPerSample / 8;
+
+    let dataStart = 0;
+    let dataSize = 0;
+    let pos = 12;
+    while (pos + 8 <= buf.length) {
+      const chunkId = buf.toString('ascii', pos, pos + 4);
+      const chunkSize = buf.readUInt32LE(pos + 4);
+      if (chunkId === 'data') {
+        dataStart = pos + 8;
+        dataSize = chunkSize;
+        break;
+      }
+      pos += 8 + chunkSize + (chunkSize % 2);
+    }
+    if (dataSize === 0) throw new Error('No data chunk found in WAV');
+
+    const numSamples = dataSize / bytesPerSample;
 
     let audio: Float32Array;
     if (bitsPerSample === 16) {

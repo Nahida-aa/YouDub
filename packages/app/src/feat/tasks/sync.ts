@@ -8,7 +8,8 @@ import {
 	type InferCollectionType,
 	type InitialQueryBuilder,
 } from '@tanstack/solid-db';
-import { socketCollectionOptions } from '#/components/socket/socketCollection/collection.ts';
+// import { socketCollectionOptions } from '#/components/socket/socketCollection/collection.ts';
+import { socketCollectionOptions } from 'socket-collection/collection.ts';
 import { socket } from '#/components/socket/ws.ts';
 
 export const tasksCollect = createCollection(
@@ -49,3 +50,35 @@ export const stagesQByTaskId = (taskId: string) => (q: InitialQueryBuilder) =>
 		.from({ stages: taskStagesCollect })
 		.where(({ stages }) => eq(stages.task_id, taskId))
 		.select(({ stages }) => stages);
+
+export const createTask = async (url: string) => {
+	const ret = await socket.emitWithAck('createTask', url);
+	if (ret.ok === false) {
+		throw new Error(ret.error.msg);
+	}
+	return ret.data;
+};
+
+export const resumeTask = async (id: string) => {
+	const ret = await socket.emitWithAck('resumeTask', id);
+	if (ret.ok === false) {
+		throw new Error(ret.error.msg);
+	}
+	return ret.data;
+};
+
+export const rerunStage = async (taskId: string, stageName: string, cascade = false) => {
+	const ret = await socket.emitWithAck('rerunStage', { taskId, stageName, cascade });
+	if (ret.ok === false) {
+		throw new Error(ret.error.msg);
+	}
+	return ret.data;
+};
+
+export const rerunTask = async (id: string) => {
+	const ret = await socket.emitWithAck('rerunTask', id);
+	if (ret.ok === false) {
+		throw new Error(ret.error.msg);
+	}
+	return ret.data;
+};

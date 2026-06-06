@@ -1,3 +1,4 @@
+import { client } from '@repo/api/src/client';
 import { socket } from '#/components/socket/ws.ts';
 
 const API_BASE =
@@ -109,55 +110,30 @@ const createRequestFn =
 			return res.text() as unknown as Promise<T>;
 		}
 	};
-const request = createRequestFn({ baseUrl: API_BASE });
-
-export function listTasks(limit = 100): Promise<{ tasks: TaskSummary[] }> {
-	return request(`/api/tasks?limit=${limit}`);
-}
-
-export function getTask(id: string): Promise<Task> {
-	return request(`/api/tasks/${id}`);
-}
+export const request = createRequestFn({ baseUrl: API_BASE });
 
 export function getTaskLog(id: string): Promise<string> {
 	return request(`/api/tasks/${id}/log`);
 }
 
-export function deleteTask(id: string): Promise<void> {
-	return request(`/api/tasks/${id}`, { method: 'DELETE' });
-}
+// export function rerunTask(id: string): Promise<Task> {
+// 	return request(`/api/tasks/${id}/rerun`, { method: 'POST' });
+// }
 
-export function rerunTask(id: string): Promise<Task> {
-	return request(`/api/tasks/${id}/rerun`, { method: 'POST' });
-}
+// export function resumeTask(id: string): Promise<Task> {
+// 	return request(`/api/tasks/${id}/resume`, { method: 'POST' });
+// }
 
-export function resumeTask(id: string): Promise<Task> {
-	return request(`/api/tasks/${id}/resume`, { method: 'POST' });
-}
-
-export function rerunStage(
-	id: string,
-	stage: string,
-	cascade = false,
-): Promise<Task> {
-	return request(`/api/tasks/${id}/rerun-stage`, {
-		method: 'POST',
-		body: JSON.stringify({ stage, cascade }),
-	});
-}
-
-export const createTask = async (url: string) => {
-	const ret = await socket.emitWithAck('createTask', url);
-	if (ret.ok === false) {
-		throw new Error(ret.error.msg);
-	}
-	return ret.data;
-	// if (ret) {
-	// return request(`/api/tasks`, {
-	// 	method: 'POST',
-	// 	body: JSON.stringify({ url }),
-	// });
-};
+// export function rerunStage(
+// 	id: string,
+// 	stage: string,
+// 	cascade = false,
+// ): Promise<Task> {
+// 	return request(`/api/tasks/${id}/rerun-stage`, {
+// 		method: 'POST',
+// 		body: JSON.stringify({ stage, cascade }),
+// 	});
+// }
 
 export function uploadLocalTask(
 	file: File,
@@ -178,71 +154,11 @@ export function uploadLocalTask(
 	});
 }
 
-export interface TaskDescription {
-	src: string;
-	dst: string;
-}
-
-export function getTaskDescription(id: string): Promise<TaskDescription> {
-	return request(`/api/tasks/${id}/description`);
-}
-
-export function translateTaskDescription(id: string): Promise<TaskDescription> {
-	return request(`/api/tasks/${id}/translate-description`, { method: 'POST' });
-}
-
 export function finalVideoUrl(final_video_path: string): string {
+	client.finalVideoUrl.$get({ query: { final_video_path } }); // 预热接口
 	return `${API_BASE}/api/finalVideoUrl?final_video_path=${encodeURIComponent(final_video_path)}`;
 }
 
-export function finalVideoDownloadUrl(id: string): string {
-	return `${API_BASE}/api/tasks/${id}/artifact/final-video?download=1`;
-}
-
-export function getCookieInfo(): Promise<CookieInfo> {
-	return request('/api/cookies/youtube');
-}
-
-export const saveCookie = async (content: string) => {
-	return await socket.emitWithAck('save_youtube_cookie', content);
-	// return request('/api/cookies/youtube', {
-	// 	method: 'POST',
-	// 	body: JSON.stringify({ content }),
-	// });
-};
-
-export function getOpenAISettings(): Promise<OpenAISettings> {
-	return request('/api/settings/openai');
-}
-
-export function saveOpenAISettings(
-	settings: OpenAISettingsUpdate,
-): Promise<OpenAISettings> {
-	return request('/api/settings/openai', {
-		method: 'POST',
-		body: JSON.stringify(settings),
-	});
-}
-
-export function getOpenAIModels(settings: {
-	base_url: string;
-	api_key: string;
-}): Promise<OpenAIModels> {
-	return request('/api/settings/openai/models', {
-		method: 'POST',
-		body: JSON.stringify(settings),
-	});
-}
-
-export function getYtdlpSettings(): Promise<YtdlpSettings> {
-	return request('/api/settings/ytdlp');
-}
-
-export function saveYtdlpSettings(
-	settings: YtdlpSettings,
-): Promise<YtdlpSettings> {
-	return request('/api/settings/ytdlp', {
-		method: 'POST',
-		body: JSON.stringify(settings),
-	});
+export function finalVideoDownloadUrl(final_video_path: string): string {
+	return `${API_BASE}/api/finalVideoUrl?final_video_path=${encodeURIComponent(final_video_path)}&download=true`;
 }

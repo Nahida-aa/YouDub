@@ -4,6 +4,11 @@ import { STAGES } from '#/feat/tasks/stages.ts';
 import { taskStages, tasks } from '#/feat/tasks/table.ts';
 import { io } from '#/socket.io/io.ts';
 
+export function sanitizeText(value: string, fallback = 'untitled'): string {
+	const cleaned = value.replace(/[^\w\u4e00-\u9fff.-]+/g, '_').replace(/_+/g, '_').replace(/^[._]+|[._]+$/g, '');
+	return cleaned.slice(0, 120) || fallback;
+}
+
 export function nowISO(): string {
 	return new Date().toISOString().replace(/\.\d{3}Z$/, '');
 }
@@ -64,20 +69,6 @@ export const createTask = async (url: string, taskId: string) => {
 const STAGE_ORDER_CASE = sql`CASE ${STAGES.map(
 	(s, i) => sql`WHEN ${taskStages.name} = ${s.name} THEN ${i + 1}`,
 )} ELSE 99 END`;
-
-export async function getTaskWithStages(taskId: string) {
-	const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId));
-
-	if (!task) return null;
-
-	const stages = await db
-		.select()
-		.from(taskStages)
-		.where(eq(taskStages.task_id, taskId))
-		.orderBy(STAGE_ORDER_CASE);
-
-	return { ...task, stages };
-}
 
 export async function updateTask(
 	taskId: string,

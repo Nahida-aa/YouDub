@@ -1,6 +1,6 @@
-import { getQueryClient } from '@repo/shared/integrations/tanstack-query/provider';
 import { ErrorCard } from '@repo/ui-solid/app/error';
 import { NotFound } from '@repo/ui-solid/app/NotFound';
+import { getQueryClient } from '@repo/ui-solid/tanstack-query/provider';
 import {
 	createRouteMask,
 	createRouter,
