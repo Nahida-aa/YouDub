@@ -1,19 +1,23 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { eq } from 'drizzle-orm';
-import { REPO_ROOT, WORKFOLDER, YOUTUBE_COOKIE_PATH } from './src/config/config.ts';
+import {
+	REPO_ROOT,
+	WORKFOLDER,
+	YOUTUBE_COOKIE_PATH,
+} from './src/config/config.ts';
 import { env } from './src/config/env.ts';
 import { db } from './src/db/index.ts';
+import { createTask, findTaskByVideoId } from './src/feat/tasks/fn.ts';
 import {
 	getStageStatuses,
 	rerunSingleStage,
 	resumePipeline,
 	runPipeline,
 } from './src/feat/tasks/pipeline-runner.ts';
-import { createTask, findTaskByVideoId } from './src/feat/tasks/fn.ts';
-import { extractVideoId, isYouTubeUrl } from './src/feat/tasks/validate.ts';
 import { tasks } from './src/feat/tasks/table.ts';
+import { extractVideoId, isYouTubeUrl } from './src/feat/tasks/validate.ts';
 
 type Command =
 	| 'startTask'
@@ -28,6 +32,7 @@ const config = JSON.parse(readFileSync('./config.json', 'utf-8')) as {
 	taskId?: string;
 	stageName?: string;
 	youtubeUrl?: string;
+	resumeFrom?: string;
 };
 
 const cmd: Command = config.command ?? 'startTask';
@@ -90,8 +95,18 @@ switch (cmd) {
 			const videoId = extractVideoId(url);
 			const existing = await findTaskByVideoId(videoId);
 			if (existing) {
-				const row = await db.select().from(tasks).where(eq(tasks.id, existing)).limit(1);
-				console.log(JSON.stringify({ taskId: existing, url, status: 'exists', task: row[0] }, null, 2));
+				const row = await db
+					.select()
+					.from(tasks)
+					.where(eq(tasks.id, existing))
+					.limit(1);
+				console.log(
+					JSON.stringify(
+						{ taskId: existing, url, status: 'exists', task: row[0] },
+						null,
+						2,
+					),
+				);
 				break;
 			}
 
@@ -100,20 +115,36 @@ switch (cmd) {
 			// Fetch video title via yt-dlp --dump-json (optional)
 			try {
 				const infoArgs = ['--dump-json'];
-				if (isYouTubeUrl(url) && existsSync(YOUTUBE_COOKIE_PATH)) infoArgs.push('--cookies', YOUTUBE_COOKIE_PATH);
-				if (isYouTubeUrl(url) && env.YTDLP_PROXY_PORT) infoArgs.push('--proxy', `http://127.0.0.1:${env.YTDLP_PROXY_PORT}`);
+				if (isYouTubeUrl(url) && existsSync(YOUTUBE_COOKIE_PATH))
+					infoArgs.push('--cookies', YOUTUBE_COOKIE_PATH);
+				if (isYouTubeUrl(url) && env.YTDLP_PROXY_PORT)
+					infoArgs.push('--proxy', `http://127.0.0.1:${env.YTDLP_PROXY_PORT}`);
 				infoArgs.push(url);
-				const infoR = spawnSync('yt-dlp', infoArgs, { stdio: ['pipe', 'pipe', 'pipe'], timeout: 30_000 });
+				const infoR = spawnSync('yt-dlp', infoArgs, {
+					stdio: ['pipe', 'pipe', 'pipe'],
+					timeout: 30_000,
+				});
 				if (infoR.status === 0 && infoR.stdout.length > 0) {
 					const info = JSON.parse(infoR.stdout.toString());
 					if (info.title) {
-						await db.update(tasks).set({ title: info.title }).where(eq(tasks.id, videoId));
+						await db
+							.update(tasks)
+							.set({ title: info.title })
+							.where(eq(tasks.id, videoId));
 						task.title = info.title;
 					}
 				}
-			} catch { /* title is optional */ }
+			} catch {
+				/* title is optional */
+			}
 
-			console.log(JSON.stringify({ taskId: videoId, url, status: 'created', task }, null, 2));
+			console.log(
+				JSON.stringify(
+					{ taskId: videoId, url, status: 'created', task },
+					null,
+					2,
+				),
+			);
 
 			console.log(`\n[CLI] Running pipeline for task ${videoId}...`);
 			await runPipeline(videoId);
