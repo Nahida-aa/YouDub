@@ -1,6 +1,6 @@
 import { appendFileSync, mkdirSync, existsSync, readFileSync, writeFileSync, statSync, readdirSync, rmSync } from 'node:fs';
 import { join, dirname, relative, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { db } from './../../db/index.ts';
 import { eq, sql } from 'drizzle-orm';
 import { tasks, taskStages } from './../../feat/tasks/table.ts';
@@ -565,50 +565,118 @@ async function stageTts(taskId: string, sessionPath: string) {
     for (const f of [dubbingFile, timingsFile, finalVideo]) { if (existsSync(f)) rmSync(f); }
   }
 
-  let fallbackRef = '';
-  for (let i = 0; i < translation.length; i++) {
-    const idx = String(i + 1).padStart(4, '0');
-    const refPath = resolve(vocalsDir, `${idx}.wav`);
-    if (existsSync(refPath) && statSync(refPath).size > 1200 * 16 * 2) {
-      fallbackRef = refPath;
-      break;
-    }
-  }
-
   const ttsCfg = engines.tts;
-  const voxcpm = createTTSBackend(ttsCfg);
-  await voxcpm.load();
 
-  for (let i = 0; i < translation.length; i++) {
-    const item = translation[i];
-    const idx = String(i + 1).padStart(4, '0');
-    const outPath = resolve(ttsDir, `${idx}.wav`);
-    if (existsSync(outPath)) continue;
-
-    const text = item.dst || item.zh || '';
-    if (!text.trim()) {
-      writeFileSync(outPath, Buffer.alloc(44));
-      continue;
+  if (ttsCfg.runtime === 'pytorch') {
+    await runPytorchBatch(taskId, ttsCfg, translationFile, vocalsDir, ttsDir, translation.length);
+  } else {
+    let fallbackRef = '';
+    for (let i = 0; i < translation.length; i++) {
+      const idx = String(i + 1).padStart(4, '0');
+      const refPath = resolve(vocalsDir, `${idx}.wav`);
+      if (existsSync(refPath) && statSync(refPath).size > 1200 * 16 * 2) {
+        fallbackRef = refPath;
+        break;
+      }
     }
 
-    let refWav = resolve(vocalsDir, `${idx}.wav`);
-    if (!existsSync(refWav) || statSync(refWav).size < 1200 * 16 * 2) {
-      refWav = fallbackRef;
-    }
-    if (!refWav || !existsSync(refWav)) {
-      emitLog(taskId, `[WARN] [TTS] No reference for segment ${idx}, skipping`);
-      writeFileSync(outPath, Buffer.alloc(44));
-      continue;
+    const voxcpm = createTTSBackend(ttsCfg);
+    await voxcpm.load();
+
+    for (let i = 0; i < translation.length; i++) {
+      const item = translation[i];
+      const idx = String(i + 1).padStart(4, '0');
+      const outPath = resolve(ttsDir, `${idx}.wav`);
+      if (existsSync(outPath)) continue;
+
+      const text = item.dst || item.zh || '';
+      if (!text.trim()) {
+        writeFileSync(outPath, Buffer.alloc(44));
+        continue;
+      }
+
+      let refWav = resolve(vocalsDir, `${idx}.wav`);
+      if (!existsSync(refWav) || statSync(refWav).size < 1200 * 16 * 2) {
+        refWav = fallbackRef;
+      }
+      if (!refWav || !existsSync(refWav)) {
+        emitLog(taskId, `[WARN] [TTS] No reference for segment ${idx}, skipping`);
+        writeFileSync(outPath, Buffer.alloc(44));
+        continue;
+      }
+
+      await updateStageDB(taskId, 'tts', { last_message: `Generating ${i + 1}/${translation.length}...` });
+
+      const { samples: audio } = await voxcpm.generate({ text, referenceWavPath: refWav });
+      writeWav(audio, outPath, 48000);
     }
 
-    await updateStageDB(taskId, 'tts', { last_message: `Generating ${i + 1}/${translation.length}...` });
-
-    const { samples: audio } = await voxcpm.generate({ text, referenceWavPath: refWav });
-    writeWav(audio, outPath, 48000);
+    await voxcpm.dispose();
   }
 
-  await voxcpm.dispose();
   await updateStageDB(taskId, 'tts', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'TTS done' });
+}
+
+async function runPytorchBatch(
+  taskId: string,
+  ttsCfg: TTSEngineConfig,
+  translationFile: string,
+  vocalsDir: string,
+  ttsDir: string,
+  total: number,
+) {
+  const scriptPath = join(REPO_ROOT, 'packages', 'voxlab', 'scripts', 'voxcpm_infer_batch.py');
+  const modelDir = join(REPO_ROOT, 'data', 'modelscope', 'OpenBMB__VoxCPM2');
+  const pythonBin = join(REPO_ROOT, '.venv', 'bin', 'python');
+  const voxcpmSrc = join(REPO_ROOT, 'submodule', 'VoxCPM', 'src');
+
+  return new Promise<void>((resolve, reject) => {
+    const proc = spawn(pythonBin, [
+      scriptPath,
+      '--model-dir', modelDir,
+      '--translation-file', translationFile,
+      '--vocals-dir', vocalsDir,
+      '--tts-dir', ttsDir,
+      '--device', ttsCfg.device,
+    ], {
+      env: { ...process.env, PYTHONPATH: voxcpmSrc },
+    });
+
+    let stderr = '';
+
+    proc.stdout.on('data', (chunk: Buffer) => {
+      const lines = chunk.toString().split('\n').filter(Boolean);
+      for (const line of lines) {
+        const progressMatch = line.match(/^\[PROGRESS\] (\d+)\/(\d+)$/);
+        if (progressMatch) {
+          const current = parseInt(progressMatch[1]);
+          const ttl = parseInt(progressMatch[2]);
+          updateStageDB(taskId, 'tts', { last_message: `Generating ${current}/${ttl}...` });
+        } else if (line.startsWith('{')) {
+          try {
+            const result = JSON.parse(line);
+            emitLog(taskId, `[TTS] Batch complete: ${result.generated} generated, ${result.skipped} skipped, ${result.errors} errors in ${result.total_time_s}s`);
+            if (result.generate_time_s) {
+              emitLog(taskId, `[VoxCPM] Generated in ${result.total_time_s}s | RTF ${result.rtf}`);
+            }
+          } catch { /* not JSON */ }
+        }
+      }
+    });
+
+    proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        const errMsg = stderr.slice(-500);
+        reject(new Error(`Python batch TTS exit code ${code}: ${errMsg}`));
+        return;
+      }
+      resolve();
+    });
+
+    proc.on('error', reject);
+  });
 }
 
 // ── Stage 8: merge_audio ──

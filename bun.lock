@@ -142,6 +142,9 @@
       "dependencies": {
         "dotenv": "^17.4.2",
       },
+      "devDependencies": {
+        "@types/bun": "^1.3.14",
+      },
     },
     "packages/device": {
       "name": "@repo/device",
