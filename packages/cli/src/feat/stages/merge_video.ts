@@ -102,16 +102,19 @@ function dstLangFromTranslation(translation: any[]): string {
   return translation.find((t: any) => t.dst_lang)?.dst_lang || 'zh';
 }
 
-function probeStyle(videoFile: string, dstLang: string): string {
+function probeStyle(videoFile: string, dstLang: string, overrides?: { fontSize?: number; marginV?: number; alignment?: number; outline?: number; shadow?: number }): string {
   const probe = spawnSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', videoFile], { stdio: ['pipe', 'pipe', 'pipe'] });
   const sizeStr = probe.stdout.toString().trim();
   const [wStr, hStr] = sizeStr.split(',');
   const width = parseInt(wStr), height = parseInt(hStr);
   const isPortrait = height > width;
-  const fontSize = isPortrait ? (dstLang === 'zh' ? 12 : 9) : (dstLang === 'zh' ? 24 : 18);
-  const marginV = isPortrait ? 70 : 5;
+  const fontSize = overrides?.fontSize ?? (isPortrait ? (dstLang === 'zh' ? 12 : 9) : (dstLang === 'zh' ? 24 : 18));
+  const marginV = overrides?.marginV ?? (isPortrait ? 70 : 5);
+  const alignment = overrides?.alignment ?? 2;
+  const outline = overrides?.outline ?? 2;
+  const shadow = overrides?.shadow ?? 0;
   const font = dstLang === 'zh' ? 'Noto Sans CJK SC' : 'Arial';
-  return `FontName=${font},FontSize=${fontSize},PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Alignment=2,MarginV=${marginV}`;
+  return `FontName=${font},FontSize=${fontSize},PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=${outline > 0 ? 1 : 0},Outline=${outline},Shadow=${shadow},Alignment=${alignment},MarginV=${marginV}`;
 }
 
 export async function stageMergeVideo(taskId: string, sessionPath: string) {
@@ -125,9 +128,11 @@ export async function stageMergeVideo(taskId: string, sessionPath: string) {
   if (!existsSync(videoFile)) throw new Error('video_source.mp4 not found');
 
   let mode = 'dub';
+  let stageOverrides: { fontSize?: number; marginV?: number; alignment?: number; outline?: number; shadow?: number } | undefined;
   try {
     const info = JSON.parse(readFileSync(join(sessionPath, 'metadata', 'local_info.json'), 'utf-8'));
     mode = info.mode || 'dub';
+    stageOverrides = info.stages?.merge_video;
   } catch { /* use default */ }
 
   if (mode === 'subtitle') {
@@ -137,7 +142,7 @@ export async function stageMergeVideo(taskId: string, sessionPath: string) {
     const dstLang = dstLangFromTranslation(data.translation);
     const subPath = join(metadataDir, `subtitles.${dstLang}.srt`);
     writeSrt(data.translation, dstLang, subPath);
-    const style = probeStyle(videoFile, dstLang);
+    const style = probeStyle(videoFile, dstLang, stageOverrides);
     const escapedSub = subPath.replace(/'/g, "'\\\\''").replace(/'/g, "'\\''");
 
     ffmpeg(['-i', videoFile,
@@ -158,7 +163,7 @@ export async function stageMergeVideo(taskId: string, sessionPath: string) {
     const dstLang = dstLangFromTranslation(data.translation);
     const subPath = join(metadataDir, `subtitles.${dstLang}.srt`);
     writeSrt(data.translation, dstLang, subPath);
-    const style = probeStyle(videoFile, dstLang);
+    const style = probeStyle(videoFile, dstLang, stageOverrides);
     const escapedSub = subPath.replace(/'/g, "'\\\\''").replace(/'/g, "'\\''");
 
     const mixedAudio = join(tmpDir, 'audio_mixed.m4a');

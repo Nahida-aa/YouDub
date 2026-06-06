@@ -1,10 +1,18 @@
 /**
- * 默认字符集（ASCII 升序排列）
- * 传入自定义 alphabet 时也**必须按 ASCII 升序**，否则字典序 ≠ 时间序
- * 字符集顺序 = 编码大小顺序，'0' < '9' < 'A' < 'Z' < 'a' < 'z'
+ * 默认字符集（仅小写 + 数字，大小写不敏感排序器也能正确排列）
+ * 字符集顺序 = 编码大小顺序，'0' < '9' < 'a' < 'z'
+ *
+ * 如需缩短 ID 长度可使用大小写混合字母表（base‑62），但此时字典序只能保证在
+ * **ASCII 严格比较**（case‑sensitive）下才等于时间序，不适用于 VS Code 等
+ * 默认 case‑insensitive 排序的环境：
+ *
+ * ```ts
+ * // base‑62，ASCII 升序：'0' < '9' < 'A' < 'Z' < 'a' < 'z'
+ * const alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+ * timeId({ alphabet })
+ * ```
  */
-const defaultAlphabet =
-	'0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+const defaultAlphabet = '0123456789abcdefghijklmnopqrstuvwxyz';
 
 function encode(num: number, alphabet: string): string {
 	const base = alphabet.length;
@@ -47,7 +55,10 @@ let counter = 0;
 /**
  * @param size    ID 总长度（默认 16）。太小时会因放不下时间戳前缀而抛错
  * @param alphabet 字符集，**必须按 ASCII 升序排列**，否则字典序 ≠ 时间序
- *                 仅单进程内保证单调递增，多实例需外部协调
+ *                 默认字符集（仅小写+数字）兼容大小写不敏感排序器。
+ *                 counter 优先让位于 random，仅在有剩余空间时使用，
+ *                 因此同毫秒内不能保证严格调用序。
+ *                 仅单进程内保证单调递增（毫秒级），多实例需外部协调
  */
 export type TimeIdOptions = {
 	size?: number;
@@ -63,20 +74,6 @@ export function timeId(options?: TimeIdOptions): string {
 
 	let now = Date.now();
 
-	if (now === lastTime) {
-		counter++;
-		if (counter >= base * base) {
-			while (Date.now() === lastTime) {
-				/* spin to next ms */
-			}
-			now = Date.now();
-			counter = 0;
-		}
-	} else {
-		counter = 0;
-	}
-	lastTime = now;
-
 	const ts = encode(now, alphabet);
 	if (ts.length > size) {
 		throw new Error(
@@ -85,15 +82,36 @@ export function timeId(options?: TimeIdOptions): string {
 	}
 
 	const randomLen = size - ts.length;
-	if (randomLen < 2) {
+	if (randomLen < 1) {
 		throw new Error(
-			`size ${size} leaves no room for 2-char counter plus random`,
+			`size ${size} leaves no room for any suffix (timestamp=${ts.length})`,
 		);
+	}
+
+	const counterLen = Math.min(2, Math.max(0, randomLen - 1));
+	const randomSuffixLen = randomLen - counterLen;
+
+	if (counterLen > 0) {
+		if (now === lastTime) {
+			counter++;
+			if (counter >= base ** counterLen) {
+				while (Date.now() === lastTime) {
+					/* spin to next ms */
+				}
+				now = Date.now();
+				counter = 0;
+			}
+		} else {
+			counter = 0;
+		}
+		lastTime = now;
 	}
 
 	return (
 		ts +
-		encode(counter, alphabet).padStart(2, alphabet[0]) +
-		(randomLen > 2 ? randomString(randomLen - 2, alphabet) : '')
+		(counterLen > 0
+			? encode(counter, alphabet).padStart(counterLen, alphabet[0])
+			: '') +
+		(randomSuffixLen > 0 ? randomString(randomSuffixLen, alphabet) : '')
 	);
 }

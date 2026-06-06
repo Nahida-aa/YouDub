@@ -5,6 +5,18 @@ import { readTaskLanguages, translationFilePath, emitLog, nowISO, updateStageDB,
 
 export async function stageTranslate(taskId: string, sessionPath: string) {
   const metadataDir = join(sessionPath, 'metadata');
+
+  // 从 stages.translate.targetLang 覆盖目标语言
+  const localInfoPath = join(metadataDir, 'local_info.json');
+  try {
+    const info = JSON.parse(readFileSync(localInfoPath, 'utf-8'));
+    const stageLang = info.stages?.translate?.targetLang;
+    if (stageLang) {
+      info.target_language = stageLang;
+      writeFileSync(localInfoPath, JSON.stringify(info, null, 2));
+    }
+  } catch { /* ignore */ }
+
   const fixedFile = join(metadataDir, 'asr_fixed.json');
   const { asrLanguage: srcLangCode, targetLanguage: dstLangCode } = readTaskLanguages(sessionPath);
   const translationFile = translationFilePath(sessionPath, dstLangCode);

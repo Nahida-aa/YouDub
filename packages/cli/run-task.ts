@@ -32,12 +32,13 @@ type Command =
 const config = JSON.parse(readFileSync('./config.json', 'utf-8')) as {
 	command?: Command;
 	startTask?: { taskId?: string };
-	createTask?: { youtubeUrl?: string; bilibiliUrl?: string; sourceFile?: string; sourceLang?: string; targetLang?: string; mode?: string };
+	createTask?: { youtubeUrl?: string; bilibiliUrl?: string; sourceFile?: string; sourceLang?: string; targetLang?: string; mode?: string; stages?: Record<string, any> };
 	resumeTask?: { taskId?: string; resumeFrom?: string };
 	rerunStage?: { taskId?: string; stageName?: string };
 	checkVideo?: { taskId?: string };
 	taskStatus?: { taskId?: string };
 	deviceInfo?: Record<string, never>;
+	stages?: Record<string, any>;
 };
 
 const cmd: Command = config.command ?? 'startTask';
@@ -132,6 +133,7 @@ switch (cmd) {
 				sourceLang: p.sourceLang,
 				targetLang: p.targetLang,
 				mode: p.mode,
+				stages: config.stages,
 			});
 
 			// Fetch video title via yt-dlp --dump-json (optional)
@@ -209,7 +211,7 @@ switch (cmd) {
 		}
 		console.log(`[CLI] Rerunning stage "${stageName}" for task ${taskId}...`);
 		try {
-			await rerunSingleStage(taskId, stageName);
+			await rerunSingleStage(taskId, stageName, config.stages);
 			console.log('[CLI] Stage completed');
 		} catch (err) {
 			console.error('[CLI] Stage failed:', err);

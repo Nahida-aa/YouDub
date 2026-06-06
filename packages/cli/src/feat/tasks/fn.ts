@@ -34,6 +34,7 @@ export async function createTask(params: {
   sourceLang?: string;
   targetLang?: string;
   mode?: string;
+  stages?: Record<string, Record<string, unknown>>;
 }) {
   const createdAt = nowISO();
   const mode = params.mode || 'dub';
@@ -60,16 +61,22 @@ export async function createTask(params: {
 
     const sessionPath = join(WORKFOLDER, 'local', params.taskId);
     mkdirSync(join(sessionPath, 'metadata'), { recursive: true });
-    writeFileSync(join(sessionPath, 'metadata', 'local_info.json'), JSON.stringify({
+    const localInfo: Record<string, any> = {
       id: params.taskId,
       title: filename.replace(/\.\w+$/, ''),
       source: 'local',
       webpage_url: taskUrl,
       original_path: params.sourceFile,
       asr_language: params.sourceLang || 'auto',
-      target_language: params.targetLang || 'en',
       mode,
-    }, null, 2));
+    };
+    if (params.targetLang) {
+      localInfo.target_language = params.targetLang;
+    }
+    if (params.stages) {
+      localInfo.stages = params.stages;
+    }
+    writeFileSync(join(sessionPath, 'metadata', 'local_info.json'), JSON.stringify(localInfo, null, 2));
   }
 
   const stages = getStages(mode);

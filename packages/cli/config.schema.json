@@ -25,7 +25,7 @@
         "bilibiliUrl": { "type": "string", "format": "uri", "description": "Bilibili URL" },
         "sourceFile": { "type": "string", "description": "本地视频文件路径" },
         "sourceLang": { "type": "string", "description": "源语言，如 zh, en; auto 则自动检测", "default": "auto" },
-        "targetLang": { "type": "string", "description": "目标语言，如 en, ja, vi(越南语)", "default": "en" },
+        "targetLang": { "type": "string", "description": "目标语言，如 en, ja, vi(越南语)；建议改用 stages.translate.targetLang" },
         "mode": { "type": "string", "enum": ["dub", "subtitle"], "default": "dub", "description": "dub=完整配音(默认), subtitle=仅字幕(保留原声)" }
       },
       "additionalProperties": false
@@ -72,6 +72,33 @@
       "type": "object",
       "description": "deviceInfo 无需额外参数",
       "properties": {},
+      "additionalProperties": false
+    },
+    "stages": {
+      "type": "object",
+      "description": "各 stage 的参数覆盖",
+      "properties": {
+        "translate": {
+          "type": "object",
+          "description": "翻译参数",
+          "properties": {
+            "targetLang": { "type": "string", "description": "目标语言，如 en, ja, vi(越南语)" }
+          },
+          "additionalProperties": false
+        },
+        "merge_video": {
+          "type": "object",
+          "description": "字幕样式参数（仅 subtitle 模式生效）",
+          "properties": {
+            "fontSize": { "type": "number", "minimum": 1, "maximum": 200, "description": "字幕字号，不填则自动: 竖屏: 12(zh) / 9(其他) ← 横屏: 24(zh) / 18(其他)" },
+            "marginV": { "type": "integer", "minimum": 0, "description": "垂直边距(像素)，不填则自动: 竖屏 70 / 横屏 5" },
+            "alignment": { "type": "integer", "enum": [1, 2, 3, 4, 5, 6, 7, 8, 9], "default": 2, "description": "字幕对齐: 1=左下 2=中下 3=右下 4=左中 5=居中 6=右中 7=左上 8=中上 9=右上" },
+            "outline": { "type": "number", "minimum": 0, "default": 2, "description": "描边宽度(像素)，0=无描边" },
+            "shadow": { "type": "number", "minimum": 0, "default": 0, "description": "阴影深度(像素)，0=无阴影" }
+          },
+          "additionalProperties": false
+        }
+      },
       "additionalProperties": false
     },
     "engines": {

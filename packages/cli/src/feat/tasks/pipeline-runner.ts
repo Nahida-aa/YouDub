@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { db } from './../../db/index.ts';
 import { eq, sql } from 'drizzle-orm';
@@ -117,11 +117,21 @@ export async function resumePipeline(taskId: string, resumeFrom?: string) {
   emitLog(taskId, `[Pipeline] Task ${taskId} completed`);
 }
 
-export async function rerunSingleStage(taskId: string, stageName: string) {
+export async function rerunSingleStage(taskId: string, stageName: string, stageOverrides?: Record<string, any>) {
   const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId));
   if (!task) throw new Error(`Task ${taskId} not found`);
 
-  const mode = readMode(task.session_path ? resolve(REPO_ROOT, task.session_path) : join(WORKFOLDER, taskId));
+  const sessionPath = task.session_path ? resolve(REPO_ROOT, task.session_path) : join(WORKFOLDER, taskId);
+
+  if (stageOverrides) {
+    const infoPath = join(sessionPath, 'metadata', 'local_info.json');
+    let info: any = {};
+    try { info = JSON.parse(readFileSync(infoPath, 'utf-8')); } catch {}
+    info.stages = stageOverrides;
+    writeFileSync(infoPath, JSON.stringify(info, null, 2));
+  }
+
+  const mode = readMode(sessionPath);
   const stages = getStages(mode);
 
   const stage = stages.find(s => s.name === stageName);
@@ -129,8 +139,6 @@ export async function rerunSingleStage(taskId: string, stageName: string) {
 
   const handler = STAGE_HANDLERS[stageName];
   if (!handler) throw new Error(`No handler for stage "${stageName}"`);
-
-  const sessionPath = task.session_path ? resolve(REPO_ROOT, task.session_path) : join(WORKFOLDER, taskId);
 
   await updateStageDB(taskId, stageName, { status: 'pending', started_at: null, completed_at: null, error_message: null, progress: 0 });
   await updateStageDB(taskId, stageName, { status: 'running', started_at: nowISO(), last_message: `Rerunning ${stage.label}...` });
