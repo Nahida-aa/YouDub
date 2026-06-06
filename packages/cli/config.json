@@ -2,9 +2,9 @@
   "$schema": "./config.schema.json",
   "command": "createTask",
   "createTask": {
-    "sourceFile": "/home/aa/repos/learn_ls/YouDub-webui/workfolder/jawed/Me_at_the_zoo__jNQXAC9IVRw/media/video_source.mp4",
+    "sourceFile": "/home/aa/下载/12.mp4",
     "targetLang": "zh",
-    "mode": "dub"
+    "mode": "subtitle"
   },
   "engines": {
     "separate": {

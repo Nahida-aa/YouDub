@@ -240,6 +240,11 @@ def _convert_segments(segments: list) -> list:
 
 
 def main() -> None:
+    if "--device" in sys.argv:
+        idx = sys.argv.index("--device")
+        if idx + 1 < len(sys.argv):
+            os.environ["WHISPER_DEVICE"] = sys.argv[idx + 1]
+
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     force_cpu = "--cpu" in sys.argv
 
