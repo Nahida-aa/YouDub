@@ -14,14 +14,25 @@ import wave
 import numpy as np
 
 
+def _resolve_device(requested: str) -> str:
+    device = requested.lower().strip()
+    if device in ("gpu", "auto"):
+        return "cuda"
+    if device in ("cpu", "cuda", "mps"):
+        return device
+    return "cuda"
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-dir", required=True)
     parser.add_argument("--ref", required=True)
     parser.add_argument("--text", required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--device", default="cuda")
     args = parser.parse_args()
+
+    device = _resolve_device(args.device)
 
     t0 = time.perf_counter()
 
@@ -31,7 +42,7 @@ def main():
     model = VoxCPM.from_pretrained(
         args.model_dir,
         load_denoiser=False,
-        device=args.device,
+        device=device,
     )
     load_time = time.perf_counter() - t0
 

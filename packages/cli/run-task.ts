@@ -1,14 +1,20 @@
+import { createInterface } from 'node:readline';
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, unlinkSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { connect } from 'node:net';
+import type { Socket } from 'node:net';
 import { eq } from 'drizzle-orm';
 import {
 	REPO_ROOT,
 	WORKFOLDER,
 	YOUTUBE_COOKIE_PATH,
-} from './src/config/config.ts';
-import { env } from './src/config/env.ts';
+	env,
+	readEnginesConfig,
+} from '@repo/config';
 import { db } from './src/db/index.ts';
+import { MLDaemon } from './src/ml/daemon/client.ts';
+import { DaemonServer } from './src/ml/daemon/server.ts';
 import { createTask, findTaskByVideoId } from './src/feat/tasks/fn.ts';
 import {
 	getStageStatuses,
@@ -20,6 +26,35 @@ import { tasks } from './src/feat/tasks/table.ts';
 import { extractVideoId, isYouTubeUrl } from './src/feat/tasks/validate.ts';
 import { timeId } from '../shared/db/timeId.ts';
 
+const DAEMON_INFO = join(REPO_ROOT, 'data', 'daemon.json');
+
+function connectToDaemon(): Promise<Socket | null> {
+  return new Promise((resolve) => {
+    try {
+      if (!existsSync(DAEMON_INFO)) { resolve(null); return; }
+      const info = JSON.parse(readFileSync(DAEMON_INFO, 'utf-8'));
+      const conn = connect({ host: '127.0.0.1', port: info.port }, () => {
+        resolve(conn);
+      });
+      conn.on('error', () => resolve(null));
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function runViaTCPSocket(taskId: string, conn: Socket): Promise<void> {
+  conn.write(JSON.stringify({ action: 'run_task', task_id: taskId }) + '\n');
+
+  const reader = createInterface({ input: conn });
+  for await (const line of reader) {
+    let msg: any;
+    try { msg = JSON.parse(line.trim()); } catch { continue; }
+    if (msg.type === 'complete' && msg.task_id === taskId) return;
+    if (msg.type === 'error' && msg.task_id === taskId) throw new Error(msg.message);
+  }
+}
+
 type Command =
 	| 'startTask'
 	| 'resumeTask'
@@ -27,17 +62,20 @@ type Command =
 	| 'checkVideo'
 	| 'taskStatus'
 	| 'createTask'
-	| 'deviceInfo';
+	| 'deviceInfo'
+	| 'daemon';
 
 const config = JSON.parse(readFileSync('./config.json', 'utf-8')) as {
 	command?: Command;
 	startTask?: { taskId?: string };
-	createTask?: { youtubeUrl?: string; bilibiliUrl?: string; sourceFile?: string; sourceLang?: string; targetLang?: string };
+	createTask?: { youtubeUrl?: string; bilibiliUrl?: string; sourceFile?: string; sourceLang?: string; targetLang?: string; mode?: string; stages?: Record<string, any> };
 	resumeTask?: { taskId?: string; resumeFrom?: string };
 	rerunStage?: { taskId?: string; stageName?: string };
 	checkVideo?: { taskId?: string };
 	taskStatus?: { taskId?: string };
 	deviceInfo?: Record<string, never>;
+	stages?: Record<string, any>;
+	daemonPort?: number;
 };
 
 const cmd: Command = config.command ?? 'startTask';
@@ -131,6 +169,8 @@ switch (cmd) {
 				sourceFile: p.sourceFile,
 				sourceLang: p.sourceLang,
 				targetLang: p.targetLang,
+				mode: p.mode,
+				stages: config.stages,
 			});
 
 			// Fetch video title via yt-dlp --dump-json (optional)
@@ -171,7 +211,28 @@ switch (cmd) {
 			);
 
 			console.log(`\n[CLI] Running pipeline for task ${videoId}...`);
-			await runPipeline(videoId);
+			const conn = await connectToDaemon();
+			if (conn) {
+				await runViaTCPSocket(videoId, conn);
+				conn.end();
+			} else {
+				const engines = readEnginesConfig();
+				const needsDaemon = engines.tts.runtime === 'pytorch'
+					|| engines.separate.runtime === 'pytorch';
+
+				let mlDaemon: MLDaemon | undefined;
+				if (needsDaemon) {
+					mlDaemon = new MLDaemon();
+					await mlDaemon.start();
+					console.log('[Daemon] ML pipeline daemon ready');
+				}
+
+				try {
+					await runPipeline(videoId, mlDaemon);
+				} finally {
+					if (mlDaemon) await mlDaemon.stop();
+				}
+			}
 			console.log('[CLI] Pipeline completed');
 		} catch (err) {
 			console.error('createTask failed:', err);
@@ -190,7 +251,28 @@ switch (cmd) {
 		const label = resumeFrom ? ` from "${resumeFrom}"` : '';
 		console.log(`[CLI] Resuming pipeline for task ${taskId}${label}...`);
 		try {
-			await resumePipeline(taskId, resumeFrom);
+			const conn = await connectToDaemon();
+			if (conn) {
+				await runViaTCPSocket(taskId, conn);
+				conn.end();
+			} else {
+				const engines = readEnginesConfig();
+				const needsDaemon = engines.tts.runtime === 'pytorch'
+					|| engines.separate.runtime === 'pytorch';
+
+				let mlDaemon: MLDaemon | undefined;
+				if (needsDaemon) {
+					mlDaemon = new MLDaemon();
+					await mlDaemon.start();
+					console.log('[Daemon] ML pipeline daemon ready');
+				}
+
+				try {
+					await resumePipeline(taskId, resumeFrom, config.stages, mlDaemon);
+				} finally {
+					if (mlDaemon) await mlDaemon.stop();
+				}
+			}
 			console.log('[CLI] Pipeline completed');
 		} catch (err) {
 			console.error('[CLI] Pipeline failed:', err);
@@ -208,12 +290,49 @@ switch (cmd) {
 		}
 		console.log(`[CLI] Rerunning stage "${stageName}" for task ${taskId}...`);
 		try {
-			await rerunSingleStage(taskId, stageName);
+			const engines = readEnginesConfig();
+			const needsDaemon = engines.tts.runtime === 'pytorch'
+				|| engines.separate.runtime === 'pytorch';
+
+			let mlDaemon: MLDaemon | undefined;
+			if (needsDaemon) {
+				mlDaemon = new MLDaemon();
+				await mlDaemon.start();
+				console.log('[Daemon] ML pipeline daemon ready');
+			}
+
+			try {
+				await rerunSingleStage(taskId, stageName, config.stages, mlDaemon);
+			} finally {
+				if (mlDaemon) await mlDaemon.stop();
+			}
 			console.log('[CLI] Stage completed');
 		} catch (err) {
 			console.error('[CLI] Stage failed:', err);
 			process.exit(1);
 		}
+		break;
+	}
+
+	case 'daemon': {
+		process.env.YOUDEUB_DAEMON = '1';
+
+		const engines = readEnginesConfig();
+		const needsDaemon = engines.tts.runtime === 'pytorch'
+			|| engines.separate.runtime === 'pytorch';
+
+		let mlDaemon: MLDaemon | undefined;
+		if (needsDaemon) {
+			mlDaemon = new MLDaemon();
+			await mlDaemon.start();
+		}
+
+		const daemonPort = config.daemonPort ?? 19109;
+		const server = new DaemonServer(daemonPort, mlDaemon!);
+		await server.start();
+
+		process.stdin.resume();
+		await new Promise(() => {});
 		break;
 	}
 
@@ -225,12 +344,33 @@ switch (cmd) {
 			process.exit(1);
 		}
 		console.log(`[CLI] Starting pipeline for task ${taskId}...`);
-		try {
-			await runPipeline(taskId);
-			console.log('[CLI] Pipeline completed');
-		} catch (err) {
-			console.error('[CLI] Pipeline failed:', err);
-			process.exit(1);
+
+		const conn = await connectToDaemon();
+		if (conn) {
+			await runViaTCPSocket(taskId, conn);
+			conn.end();
+		} else {
+			const engines = readEnginesConfig();
+			const needsDaemon = engines.tts.runtime === 'pytorch'
+				|| engines.separate.runtime === 'pytorch';
+
+			let mlDaemon: MLDaemon | undefined;
+			if (needsDaemon) {
+				mlDaemon = new MLDaemon();
+				await mlDaemon.start();
+				console.log('[Daemon] ML pipeline daemon ready');
+			}
+
+			try {
+				await runPipeline(taskId, mlDaemon);
+			} catch (err) {
+				console.error('[CLI] Pipeline failed:', err);
+				process.exit(1);
+			} finally {
+				if (mlDaemon) await mlDaemon.stop();
+			}
 		}
+
+		console.log('[CLI] Pipeline completed');
 	}
 }

@@ -87,7 +87,7 @@ def main() -> None:
 
     vocals_file = Path(args[0])
     session_path = Path(args[1])
-    language = args[2] if len(args) > 2 else "en"
+    language = None if args[2] == "auto" else args[2] if len(args) > 2 else None
     model_name = os.environ.get("WHISPER_MODEL", "large-v3-turbo")
 
     if not vocals_file.is_file():
@@ -117,11 +117,12 @@ def main() -> None:
 
     data = _convert(segments, info)
     data["_device"] = device_used
+    data["detected_language"] = info.language
 
     output_file.write_text(
         json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
     )
-    print(str(output_file))
+    print(f"ASR_OUTPUT:{output_file}")
 
 
 if __name__ == "__main__":

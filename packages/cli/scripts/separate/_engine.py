@@ -1,15 +1,26 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Callable
 
-from ..config import REPO_ROOT
-from ..devices import resolve_device
+REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 def _device() -> str:
-    return resolve_device("demucs").selected
+    configured = os.getenv("DEMUCS_DEVICE", "").strip()
+    if not configured:
+        configured = os.getenv("DEVICE", "").strip()
+    if not configured:
+        return "cuda"
+    device = configured.lower()
+    if device in ("gpu", "auto"):
+        return "cuda"
+    if device in ("cpu", "cuda", "mps"):
+        return device
+    return "cuda"
+
 
 
 def _demucs_progress(info: dict, shifts: int) -> int:
@@ -24,17 +35,33 @@ def _demucs_progress(info: dict, shifts: int) -> int:
     return max(0, min(99, int(completed_units / total_units * 100)))
 
 
+def _demucs_source_path() -> Path:
+    demucs_path = REPO_ROOT / "submodule" / "demucs"
+    api_file = demucs_path / "demucs" / "api.py"
+    if api_file.exists():
+        return demucs_path
+    raise RuntimeError(
+        "Demucs source submodule is missing or incomplete. "
+        "Clone this repository with git and run: git submodule update --init --recursive. "
+        "Do not use GitHub Download ZIP because it does not include submodules."
+    )
+
+
 def separate_audio(
-    video_file: Path,
-    session: Path,
+    video_file: Path | str,
+    session: Path | str,
     progress_callback: Callable[[int, str], None] | None = None,
 ) -> tuple[Path, Path]:
+    video_file = Path(video_file)
+    session = Path(session)
+
     demucs_path = _demucs_source_path()
     sys.path.insert(0, str(demucs_path))
 
     from demucs.api import Separator, save_audio
 
     media_dir = session / "media"
+    media_dir.mkdir(parents=True, exist_ok=True)
     vocals_file = media_dir / "audio_vocals.wav"
     bgm_file = media_dir / "audio_bgm.wav"
     if vocals_file.exists() and bgm_file.exists():
@@ -67,15 +94,3 @@ def separate_audio(
     save_audio(vocals, str(vocals_file), samplerate=separator.samplerate)
     save_audio(bgm, str(bgm_file), samplerate=separator.samplerate)
     return vocals_file, bgm_file
-
-
-def _demucs_source_path() -> Path:
-    demucs_path = REPO_ROOT / "submodule" / "demucs"
-    api_file = demucs_path / "demucs" / "api.py"
-    if api_file.exists():
-        return demucs_path
-    raise RuntimeError(
-        "Demucs source submodule is missing or incomplete. "
-        "Clone this repository with git and run: git submodule update --init --recursive. "
-        "Do not use GitHub Download ZIP because it does not include submodules."
-    )

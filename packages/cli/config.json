@@ -1,22 +1,31 @@
 {
+  "$schema": "./config.schema.json",
   "command": "createTask",
   "createTask": {
-    "sourceFile": "/home/aa/下载/14.mp4",
-    "sourceLang": "zh",
-    "targetLang": "vi"
+    "sourceFile": "https://github.com/user-attachments/assets/bd02936f-cf3c-4e4b-85b5-0410d38f69f5",
+    "targetLang": "zh"
   },
-  "engines": {
+  "engines": {  
     "separate": {
-      "runtime": "ort",
+      "runtime": "pytorch",
       "device": "cpu"
     },
     "asr": {
       "runtime": "faster-whisper",
-      "device": "gpu"
+      "device": "cuda"
     },
     "tts": {
       "runtime": "pytorch",
       "device": "cpu"
+    }
+  },
+  "stages": {
+    "translate": {
+      "targetLang": "zh"
+    },
+    "merge_video": {
+      "fontSize": 19,
+      "marginV":34
     }
   }
 }
