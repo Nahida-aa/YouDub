@@ -58,15 +58,36 @@ export async function runPipeline(taskId: string, daemon?: MLDaemon) {
 export async function resumePipeline(taskId: string, resumeFrom?: string, stageOverrides?: Record<string, any>, daemon?: MLDaemon) {
   let { task, sessionPath } = await currentTask(taskId);
 
-  if (stageOverrides) {
-    const infoPath = join(sessionPath, 'metadata', 'local_info.json');
-    let info: any = {};
-    try { info = JSON.parse(readFileSync(infoPath, 'utf-8')); } catch {}
-    info.stages = stageOverrides;
-    writeFileSync(infoPath, JSON.stringify(info, null, 2));
+  const infoPath = join(sessionPath, 'metadata', 'local_info.json');
+  let info: any = {};
+  try { info = JSON.parse(readFileSync(infoPath, 'utf-8')); } catch {}
+
+  // Mode transition handling
+  const lastRunMode = info.lastRunMode;
+  if (lastRunMode && lastRunMode !== info.mode) {
+    info.lastRunMode = info.mode;
+    emitLog(taskId, `[Pipeline] Mode switched from "${lastRunMode}" to "${info.mode}"`);
+
+    const stages = getStages(info.mode);
+    const existing = await db.select({ name: taskStages.name }).from(taskStages).where(eq(taskStages.task_id, taskId));
+    const existingNames = new Set(existing.map(r => r.name));
+    const newStages = stages.filter(s => !existingNames.has(s.name));
+    if (newStages.length > 0) {
+      await db.insert(taskStages).values(newStages.map(s => ({ task_id: taskId, name: s.name, label: s.label, status: 'pending' })));
+    }
+
+    // merge_video produces different output per mode → force re-run
+    await db.update(taskStages).set({ status: 'pending', started_at: null, completed_at: null, error_message: null, progress: 0 })
+      .where(sql`${taskStages.task_id} = ${taskId} AND ${taskStages.name} = 'merge_video'`);
   }
 
-  const mode = readMode(sessionPath);
+  if (stageOverrides) {
+    info.stages = stageOverrides;
+  }
+
+  writeFileSync(infoPath, JSON.stringify(info, null, 2));
+
+  const mode = info.mode || 'dub';
   const stages = getStages(mode);
 
   let startIdx = 0;

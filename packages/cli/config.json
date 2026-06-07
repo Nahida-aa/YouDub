@@ -1,11 +1,12 @@
 {
   "$schema": "./config.schema.json",
+  "mode": "dub",
   "command": "resumeTask",
   "resumeTask": {
     "taskId": "VLmkCww00z",
-    "resumeFrom": "separate"
+    "resumeFrom": "merge_video"
   },
-  "engines": {  
+  "engines": {
     "separate": {
       "runtime": "pytorch",
       "device": "cpu"
@@ -14,18 +15,22 @@
       "runtime": "faster-whisper",
       "device": "cuda"
     },
+    "translate": {
+      "apiBase": "http://localhost:11434/v1",
+      "model": "gemma4:31b-cloud"
+    },
     "tts": {
-      "runtime": "pytorch",
+      "runtime": "cloud",
       "device": "cpu"
     }
   },
   "stages": {
     "translate": {
-      "targetLang": "zh"
+      "targetLang": "vi"
     },
     "merge_video": {
       "fontSize": 19,
-      "marginV":34
+      "marginV": 34
     }
   }
 }

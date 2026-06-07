@@ -69,6 +69,7 @@ export async function createTask(params: {
       original_path: params.sourceFile,
       asr_language: params.sourceLang || 'auto',
       mode,
+      lastRunMode: mode,
     };
     if (params.targetLang) {
       localInfo.target_language = params.targetLang;

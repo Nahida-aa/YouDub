@@ -42,7 +42,7 @@ export async function stageTranslate(taskId: string, sessionPath: string) {
   const enginesCfg = readEnginesConfig();
   const apiKey = env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY not configured');
-  const api = { baseUrl: enginesCfg.translate.apiBase, apiKey, model: enginesCfg.translate.model, translateConcurrency: env.OPENAI_TRANSLATE_CONCURRENCY };
+  const api = { baseUrl: enginesCfg.translate.apiBase, apiKey, model: enginesCfg.translate.model };
 
   const metaView = {
     title: (meta.title || '').trim().slice(0, 500) || '(unknown)',
@@ -73,12 +73,13 @@ export async function stageTranslate(taskId: string, sessionPath: string) {
 # 转录文本
 ${fullText.slice(0, 10000)}`;
 
-  async function callJson(system: string, user: string): Promise<any> {
+  async function callJson(system: string, user: string, maxTokens = 1024): Promise<any> {
     const resp = await fetch(api.baseUrl + '/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${api.apiKey}` },
       body: JSON.stringify({
         model: api.model,
+        max_tokens: maxTokens,
         messages: [
           { role: 'system', content: system },
           { role: 'user', content: user },
@@ -98,7 +99,7 @@ ${fullText.slice(0, 10000)}`;
 
   let summary = '', hotwords: string[] = [], corrections: string[] = [];
   try {
-    const pre = await callJson('You output strict JSON only.', preprocessPrompt);
+    const pre = await callJson('You output strict JSON only.', preprocessPrompt, 2048);
     summary = pre.summary || '';
     hotwords = (pre.hotwords || []).map((h: any) => `${h.src} -> ${h.dst}`);
     corrections = (pre.corrections || []).map((c: any) => `${c.wrong} -> ${c.correct}`);
@@ -127,27 +128,46 @@ ${correctionsStr}
 1) 准确自然。忠实传达原意，口语保持口语感，书面保持克制；避免直译腔与过度文学化；不擅自增删信息。
 2) 逐句对齐。一句对一句。
 3) 人名、地名、品牌、型号、缩写默认保留；文件名、路径、URL 一律保留原样。
-4) 使用中文标点；破折号禁用，改用逗号或括号。
-5) 输出格式：{"dst": "<对应中文译文>"}`;
+4) 使用${dstLangName}标点；破折号禁用，改用逗号或括号。
+5) 输出格式：{"dst": ["<对应${dstLangName}译文>", "<对应${dstLangName}译文>", ...]}
 
-  async function translateSentence(text: string, attempt = 0): Promise<string> {
+用户消息会发送一个编号列表，请严格按顺序逐句翻译，每句一条。`;
+
+  const BATCH_SIZE = 50;
+  const dsts: string[] = [];
+
+  async function translateBatch(batchTexts: string[], attempt = 0): Promise<string[]> {
+    const numbered = batchTexts.map((t, i) => `${i + 1}. ${t}`).join('\n');
+    const userMsg = attempt > 0
+      ? `${numbered}\n\n（注意：以上回复包含中文！必须全部输出${dstLangName}译文，不得包含任何中文。）`
+      : numbered;
     try {
-      const data = await callJson(translateSystem, text);
-      if (!data.dst?.trim()) throw new Error('empty dst');
-      return (data.dst as string).trim();
+      const data = await callJson(translateSystem, userMsg, 3072);
+      const arr = data.dst;
+      if (!Array.isArray(arr) || arr.length === 0) throw new Error('dst is not an array');
+      const results = arr.slice(0, batchTexts.length).map((d: any, i: number) => {
+        const dst = String(d ?? '').trim();
+        const chineseRatio = (dst.match(/[\u4e00-\u9fff]/g) || []).length / (dst.length || 1);
+        if (dstLangCode !== 'zh' && chineseRatio > 0.3) {
+          emitLog(taskId, `[WARN] [Translate] Item ${i + 1} still Chinese (ratio=${chineseRatio.toFixed(2)}), using source`);
+          return batchTexts[i];
+        }
+        return dst || batchTexts[i];
+      });
+      while (results.length < batchTexts.length) results.push(batchTexts[results.length]);
+      return results;
     } catch (e: any) {
-      if (attempt < 2) return translateSentence(text, attempt + 1);
-      throw new Error(`Translate failed for "${text.slice(0, 40)}": ${e.message}`);
+      if (attempt < 2) return translateBatch(batchTexts, attempt + 1);
+      emitLog(taskId, `[WARN] [Translate] Batch failed after 3 attempts: ${e.message} — using source as fallback`);
+      return batchTexts;
     }
   }
 
-  const concurrency = Math.min(api.translateConcurrency, 50);
-  const dsts: string[] = [];
-  for (let i = 0; i < texts.length; i += concurrency) {
-    const batch = texts.slice(i, i + concurrency);
-    const results = await Promise.all(batch.map((t: string) => translateSentence(t)));
+  for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+    const batch = texts.slice(i, i + BATCH_SIZE);
+    const results = await translateBatch(batch);
     dsts.push(...results);
-    await updateStageDB(taskId, 'translate', { last_message: `Translating ${Math.min(i + concurrency, texts.length)}/${texts.length}...` });
+    await updateStageDB(taskId, 'translate', { last_message: `Translating ${Math.min(i + BATCH_SIZE, texts.length)}/${texts.length}...` });
   }
 
   const translation = utterances.map((u: any, idx: number) => ({

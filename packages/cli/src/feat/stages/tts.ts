@@ -111,11 +111,14 @@ export async function stageTts(taskId: string, sessionPath: string, daemon?: MLD
       model_dir: modelDir,
       device: ttsCfg.device,
     }, (current, total) => {
+      emitLog(taskId, `[TTS] ${current}/${total}`);
       updateStageDB(taskId, 'tts', { last_message: `Generating ${current}/${total}...` });
     });
     const r = result as Record<string, number>;
     emitLog(taskId, `[TTS] Batch complete: ${r.generated ?? 0} generated, ${r.skipped ?? 0} skipped, ${r.errors ?? 0} errors`);
-    if (r.generate_time_s) emitLog(taskId, `[VoxCPM] Generated in ${r.generate_time_s}s`);
+    if (r.load_time_s) emitLog(taskId, `[TTS] Model loaded in ${r.load_time_s}s`);
+    if (r.generate_time_s) emitLog(taskId, `[TTS] Generated in ${r.generate_time_s}s`);
+    if (r.total_time_s) emitLog(taskId, `[TTS] Total ${r.total_time_s}s (load + generate)`);
     if (r.errors && r.errors > 0) emitLog(taskId, `[WARN] [TTS] ${r.errors} segments had errors`);
     await updateStageDB(taskId, 'tts', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'TTS done' });
     return;
@@ -161,7 +164,7 @@ export async function stageTts(taskId: string, sessionPath: string, daemon?: MLD
 
       await updateStageDB(taskId, 'tts', { last_message: `Generating ${i + 1}/${translation.length}...` });
 
-      const { samples: audio } = await voxcpm.generate({ text, referenceWavPath: refWav });
+      const { samples: audio } = await voxcpm.generate({ text, referenceWavPath: refWav, promptText: item.src });
       writeWav(audio, outPath, 48000);
     }
 

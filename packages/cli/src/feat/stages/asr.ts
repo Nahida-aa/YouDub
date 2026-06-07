@@ -27,7 +27,7 @@ export async function stageAsr(taskId: string, sessionPath: string, daemon?: MLD
       language: asrLanguage || 'auto',
       device,
     });
-    const r = result as Record<string, string>;
+    const r = result as Record<string, any>;
     if (r.detected_language) {
       const localInfoPath = join(sessionAbsPath, 'metadata', 'local_info.json');
       let local: any = {};
@@ -35,6 +35,10 @@ export async function stageAsr(taskId: string, sessionPath: string, daemon?: MLD
       local.asr_language = r.detected_language;
       writeFileSync(localInfoPath, JSON.stringify(local, null, 2));
     }
+    if (r.load_time_s) emitLog(taskId, `[ASR] Model loaded in ${r.load_time_s}s`);
+    if (r.process_time_s) emitLog(taskId, `[ASR] Transcribed in ${r.process_time_s}s`);
+    if (r.audio_duration_s) emitLog(taskId, `[ASR] Audio duration ${Number(r.audio_duration_s).toFixed(1)}s`);
+    if (r.rtf) emitLog(taskId, `[ASR] RTF ${r.rtf}`);
   } else if (runtime === 'pytorch') {
     await asrPytorch(taskId, vocalsPath, sessionAbsPath, asrLanguage, device, pyBin);
   } else {

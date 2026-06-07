@@ -5,8 +5,14 @@
   "properties": {
     "command": {
       "type": "string",
-      "enum": ["startTask", "resumeTask", "rerunStage", "checkVideo", "taskStatus", "createTask", "deviceInfo"],
+      "enum": ["startTask", "resumeTask", "rerunStage", "checkVideo", "taskStatus", "createTask", "deviceInfo", "daemon", "daemonStatus", "daemonStop", "listModels"],
       "description": "要执行的命令"
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["dub", "subtitle"],
+      "default": "dub",
+      "description": "全局工作模式: dub=完整配音(默认), subtitle=仅字幕(保留原声)"
     },
     "startTask": {
       "type": "object",
@@ -25,8 +31,7 @@
         "bilibiliUrl": { "type": "string", "format": "uri", "description": "Bilibili URL" },
         "sourceFile": { "type": "string", "description": "本地视频文件路径" },
         "sourceLang": { "type": "string", "description": "源语言，如 zh, en; auto 则自动检测", "default": "auto" },
-        "targetLang": { "type": "string", "description": "目标语言，如 en, ja, vi(越南语)；建议改用 stages.translate.targetLang" },
-        "mode": { "type": "string", "enum": ["dub", "subtitle"], "default": "dub", "description": "dub=完整配音(默认), subtitle=仅字幕(保留原声)" }
+        "targetLang": { "type": "string", "description": "目标语言，如 en, ja, vi(越南语)；建议改用 stages.translate.targetLang" }
       },
       "additionalProperties": false
     },

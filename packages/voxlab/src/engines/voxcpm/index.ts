@@ -2,11 +2,11 @@ import type { TTSBackend, VoxCPMNodeConfig, VoxCPMPythonConfig, VoxCPMCloudConfi
 import { VoxCPMBackend } from '../../types.ts';
 import { VoxCPMNodeONNX } from './onnx-node.ts';
 import { VoxCPMPython } from './pth.ts';
-import { VoxCPMCloud } from './api.ts';
+import { VoxCPMCloud } from './cloud.ts';
 
 export { VoxCPMNodeONNX, checkONNXStatus, checkONNXReady } from './onnx-node.ts';
 export { VoxCPMPython } from './pth.ts';
-export { VoxCPMCloud } from './api.ts';
+export { VoxCPMCloud } from './cloud.ts';
 
 export type { TTSBackend, VoxCPMNodeConfig, VoxCPMPythonConfig, VoxCPMCloudConfig };
 

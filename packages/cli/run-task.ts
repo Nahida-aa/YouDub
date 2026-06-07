@@ -1,6 +1,6 @@
 import { createInterface } from 'node:readline';
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { connect } from 'node:net';
 import type { Socket } from 'node:net';
@@ -59,12 +59,14 @@ type Command =
 	| 'deviceInfo'
 	| 'daemon'
 	| 'daemonStatus'
-	| 'daemonStop';
+	| 'daemonStop'
+	| 'listModels';
 
 const config = JSON.parse(readFileSync('./config.json', 'utf-8')) as {
 	command?: Command;
+	mode?: string;
 	startTask?: { taskId?: string };
-	createTask?: { youtubeUrl?: string; bilibiliUrl?: string; sourceFile?: string; sourceLang?: string; targetLang?: string; mode?: string; stages?: Record<string, any> };
+	createTask?: { youtubeUrl?: string; bilibiliUrl?: string; sourceFile?: string; sourceLang?: string; targetLang?: string; stages?: Record<string, any> };
 	resumeTask?: { taskId?: string; resumeFrom?: string };
 	rerunStage?: { taskId?: string; stageName?: string };
 	checkVideo?: { taskId?: string };
@@ -167,6 +169,30 @@ switch (cmd) {
 		break;
 	}
 
+	case 'listModels': {
+		const engines = readEnginesConfig();
+		const apiBase = engines.translate?.apiBase || env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+		const apiKey = env.OPENAI_API_KEY;
+		if (!apiKey) {
+			console.error('OPENAI_API_KEY not configured');
+			process.exit(1);
+		}
+		try {
+			const resp = await fetch(`${apiBase}/models`, {
+				headers: { Authorization: `Bearer ${apiKey}` },
+			});
+			if (!resp.ok) throw new Error(`API ${resp.status}: ${await resp.text()}`);
+			const data = await resp.json() as any;
+			for (const m of data.data || []) {
+				console.log(`  ${m.id}`);
+			}
+		} catch (err) {
+			console.error('listModels failed:', err);
+			process.exit(1);
+		}
+		break;
+	}
+
 	case 'createTask': {
 		const p = config.createTask ?? {};
 		const url = p.youtubeUrl ?? p.bilibiliUrl;
@@ -195,13 +221,14 @@ switch (cmd) {
 				}
 			}
 
+			const taskMode = config.mode ?? 'dub';
 			const [task] = await createTask({
 				url,
 				taskId: videoId,
 				sourceFile: p.sourceFile,
 				sourceLang: p.sourceLang,
 				targetLang: p.targetLang,
-				mode: p.mode,
+				mode: taskMode,
 				stages: config.stages,
 			});
 
@@ -281,6 +308,24 @@ switch (cmd) {
 		}
 		const resumeFrom = config.resumeTask?.resumeFrom;
 		const label = resumeFrom ? ` from "${resumeFrom}"` : '';
+
+		// Allow mode switch on resume (e.g. subtitle → dub)
+		if (config.mode) {
+			const taskRows = await db.select({ session_path: tasks.session_path }).from(tasks).where(eq(tasks.id, taskId)).limit(1);
+			if (taskRows.length > 0) {
+				const sessionPath = taskRows[0].session_path
+					? resolve(REPO_ROOT, taskRows[0].session_path)
+					: join(WORKFOLDER, taskId);
+				const infoPath = join(sessionPath, 'metadata', 'local_info.json');
+				if (existsSync(infoPath)) {
+					const localInfo = JSON.parse(readFileSync(infoPath, 'utf-8'));
+					localInfo.mode = config.mode;
+					writeFileSync(infoPath, JSON.stringify(localInfo, null, 2));
+					console.log(`[CLI] Switched mode to "${config.mode}"`);
+				}
+			}
+		}
+
 		console.log(`[CLI] Resuming pipeline for task ${taskId}${label}...`);
 		try {
 			const conn = await connectToDaemon(DAEMON_PORT);

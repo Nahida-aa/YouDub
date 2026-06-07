@@ -153,8 +153,8 @@ export async function transcribe(audioPath: string): Promise<WhisperSegment[]> {
 	const initSelfK = new Tensor('float32', new F32(nLayers * batch * maxSeq * dModel), [nLayers, batch, maxSeq, dModel]);
 	const initSelfV = new Tensor('float32', new F32(nLayers * batch * maxSeq * dModel), [nLayers, batch, maxSeq, dModel]);
 
-	let selfK = initSelfK;
-	let selfV = initSelfV;
+	let selfK: Tensor = initSelfK;
+	let selfV: Tensor = initSelfV;
 
 	for (let step = 0; step < maxSeq; step++) {
 		const tokenId = step === 0 ? DECODER_START_TOKEN : allTokens[step - 1];
@@ -180,8 +180,8 @@ export async function transcribe(audioPath: string): Promise<WhisperSegment[]> {
 		if (nextToken === EOS_TOKEN) break;
 		allTokens.push(nextToken);
 
-		selfK = outputs.out_n_layer_self_k_cache as Tensor;
-		selfV = outputs.out_n_layer_self_v_cache as Tensor;
+		selfK = outputs.out_n_layer_self_k_cache;
+		selfV = outputs.out_n_layer_self_v_cache;
 	}
 
 	const segments = decodeTimestamps(allTokens);

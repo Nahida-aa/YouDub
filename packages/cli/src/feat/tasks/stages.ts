@@ -17,7 +17,7 @@ export const DUB_STAGES: StageSpec[] = [
 
 export const SUBTITLE_STAGES: StageSpec[] = [
   { name: 'download', label: 'Download' },
-  { name: 'separate', label: 'Extract audio' },
+  { name: 'separate', label: 'Demucs' },
   { name: 'asr', label: 'Whisper' },
   { name: 'asr_fix', label: 'Split sentences' },
   { name: 'translate', label: 'Translate' },
