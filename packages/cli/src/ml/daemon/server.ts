@@ -1,12 +1,8 @@
 import type { Socket, TCPSocketListener } from 'bun';
-import { existsSync, mkdirSync, writeFileSync, unlinkSync } from 'node:fs';
-import { join } from 'node:path';
-import { REPO_ROOT } from '@repo/config';
 import { MLDaemon } from './client.ts';
 import { setActiveConn } from './active.ts';
+import { readEnginesConfig } from '../../feat/config/engines.ts';
 import { runPipeline } from '../../feat/tasks/pipeline-runner.ts';
-
-const DAEMON_INFO = join(REPO_ROOT, 'data', 'daemon.json');
 
 export class DaemonServer {
   private port: number;
@@ -55,14 +51,11 @@ export class DaemonServer {
       },
     });
 
-    mkdirSync(join(REPO_ROOT, 'data'), { recursive: true });
-    writeFileSync(DAEMON_INFO, JSON.stringify({ port: this.server.port, pid: process.pid }, null, 2));
-    console.log(`[DaemonServer] listening on 127.0.0.1:${this.server.port} (pid ${process.pid})`);
+    console.log(`[DaemonServer] listening on 127.0.0.1:${this.port} (pid ${process.pid})`);
   }
 
   async stop(): Promise<void> {
     try { this.server?.stop(true); } catch {}
-    try { unlinkSync(DAEMON_INFO); } catch {}
     process.exit(0);
   }
 

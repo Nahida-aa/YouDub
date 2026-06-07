@@ -11,7 +11,8 @@ import { createTask, findTaskByVideoId, nowISO } from '#/feat/tasks/fn.ts';
 import { STAGE_NAMES, STAGES } from '#/feat/tasks/stages.ts';
 import { taskStages, tasks } from '#/feat/tasks/table.ts';
 import { extractVideoId } from '#/feat/tasks/validate.ts';
-import { enqueue } from '#/feat/tasks/worker.ts';
+import { runPipeline } from '@repo/cli/src/feat/tasks/pipeline-runner.ts';
+import { getMLDaemon } from '#/feat/daemon/ml-daemon.ts';
 import type {
 	ClientToServerEvents,
 	ServerToClientEvents,
@@ -155,7 +156,15 @@ io.on('connection', async (socket) => {
 
 			const [ret] = await createTask(url.trim(), videoId);
 			const id = ret.id;
-			enqueue(ret.id);
+
+			const mlDaemon = getMLDaemon();
+			if (mlDaemon) {
+				runPipeline(id, mlDaemon).catch((err) => {
+					console.error(`[Pipeline] Task ${id} failed:`, err);
+				});
+			} else {
+				console.warn(`[Pipeline] Task ${id} created but ML daemon not ready`);
+			}
 
 			return { id };
 		}),
@@ -215,7 +224,6 @@ io.on('connection', async (socket) => {
 					},
 				],
 			});
-			enqueue(taskId);
 			return { id: taskId };
 		}),
 	);
@@ -279,7 +287,6 @@ io.on('connection', async (socket) => {
 					},
 				],
 			});
-			enqueue(taskId);
 			return { id: taskId };
 		}),
 	);
@@ -348,7 +355,6 @@ io.on('connection', async (socket) => {
 						},
 					],
 				});
-				enqueue(input.taskId);
 				return { id: input.taskId };
 			},
 		),

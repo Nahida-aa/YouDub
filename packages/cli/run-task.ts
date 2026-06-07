@@ -1,6 +1,6 @@
 import { createInterface } from 'node:readline';
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync, unlinkSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { connect } from 'node:net';
 import type { Socket } from 'node:net';
@@ -10,8 +10,8 @@ import {
 	WORKFOLDER,
 	YOUTUBE_COOKIE_PATH,
 	env,
-	readEnginesConfig,
 } from '@repo/config';
+import { readEnginesConfig } from './src/feat/config/engines.ts';
 import { db } from './src/db/index.ts';
 import { MLDaemon } from './src/ml/daemon/client.ts';
 import { DaemonServer } from './src/ml/daemon/server.ts';
@@ -26,16 +26,10 @@ import { tasks } from './src/feat/tasks/table.ts';
 import { extractVideoId, isYouTubeUrl } from './src/feat/tasks/validate.ts';
 import { timeId } from '../shared/db/timeId.ts';
 
-const DAEMON_INFO = join(REPO_ROOT, 'data', 'daemon.json');
-
-function connectToDaemon(): Promise<Socket | null> {
+function connectToDaemon(port: number): Promise<Socket | null> {
   return new Promise((resolve) => {
     try {
-      if (!existsSync(DAEMON_INFO)) { resolve(null); return; }
-      const info = JSON.parse(readFileSync(DAEMON_INFO, 'utf-8'));
-      const conn = connect({ host: '127.0.0.1', port: info.port }, () => {
-        resolve(conn);
-      });
+      const conn = connect({ host: '127.0.0.1', port }, () => resolve(conn));
       conn.on('error', () => resolve(null));
     } catch {
       resolve(null);
@@ -63,7 +57,8 @@ type Command =
 	| 'taskStatus'
 	| 'createTask'
 	| 'deviceInfo'
-	| 'daemon';
+	| 'daemon'
+	| 'daemonStatus';
 
 const config = JSON.parse(readFileSync('./config.json', 'utf-8')) as {
 	command?: Command;
@@ -79,6 +74,7 @@ const config = JSON.parse(readFileSync('./config.json', 'utf-8')) as {
 };
 
 const cmd: Command = config.command ?? 'startTask';
+const DAEMON_PORT = config.daemonPort ?? 19109;
 
 switch (cmd) {
 	case 'checkVideo': {
@@ -132,6 +128,23 @@ switch (cmd) {
 		const { getDeviceInfo } = await import('@repo/device');
 		const info = await getDeviceInfo();
 		console.log(JSON.stringify(info, null, 2));
+		break;
+	}
+
+	case 'daemonStatus': {
+		try {
+			await new Promise<void>((resolve, reject) => {
+				const sock = connect(DAEMON_PORT, '127.0.0.1', () => {
+					sock.end();
+					resolve();
+				});
+				sock.on('error', reject);
+				sock.setTimeout(2000, () => { sock.destroy(); reject(new Error('timeout')); });
+			});
+			console.log(JSON.stringify({ alive: true, port: DAEMON_PORT }));
+		} catch {
+			console.log(JSON.stringify({ alive: false, port: DAEMON_PORT, message: 'Connection failed (daemon not running)' }));
+		}
 		break;
 	}
 
@@ -211,7 +224,7 @@ switch (cmd) {
 			);
 
 			console.log(`\n[CLI] Running pipeline for task ${videoId}...`);
-			const conn = await connectToDaemon();
+			const conn = await connectToDaemon(DAEMON_PORT);
 			if (conn) {
 				await runViaTCPSocket(videoId, conn);
 				conn.end();
@@ -241,7 +254,7 @@ switch (cmd) {
 		break;
 	}
 
-	case 'resumeTask': {
+		case 'resumeTask': {
 		const taskId = config.resumeTask?.taskId;
 		if (!taskId) {
 			console.error('resumeTask.taskId required in config.json');
@@ -251,7 +264,7 @@ switch (cmd) {
 		const label = resumeFrom ? ` from "${resumeFrom}"` : '';
 		console.log(`[CLI] Resuming pipeline for task ${taskId}${label}...`);
 		try {
-			const conn = await connectToDaemon();
+			const conn = await connectToDaemon(DAEMON_PORT);
 			if (conn) {
 				await runViaTCPSocket(taskId, conn);
 				conn.end();
@@ -345,7 +358,7 @@ switch (cmd) {
 		}
 		console.log(`[CLI] Starting pipeline for task ${taskId}...`);
 
-		const conn = await connectToDaemon();
+		const conn = await connectToDaemon(DAEMON_PORT);
 		if (conn) {
 			await runViaTCPSocket(taskId, conn);
 			conn.end();

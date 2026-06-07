@@ -1,9 +1,9 @@
 {
   "$schema": "./config.schema.json",
-  "command": "createTask",
-  "createTask": {
-    "sourceFile": "https://github.com/user-attachments/assets/bd02936f-cf3c-4e4b-85b5-0410d38f69f5",
-    "targetLang": "zh"
+  "command": "resumeTask",
+  "resumeTask": {
+    "taskId": "VLmkCww00z",
+    "resumeFrom": "separate"
   },
   "engines": {  
     "separate": {

@@ -30,6 +30,13 @@ import traceback
 import wave
 from pathlib import Path
 
+# Windows: ensure stdin/stdout use binary mode so JSON lines protocol
+# (newline-delimited) is not corrupted by \n → \r\n translation.
+if sys.platform == "win32":
+    import msvcrt  # noqa: PLC0415
+    msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)   # type: ignore[attr-defined]
+    msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)  # type: ignore[attr-defined]
+
 # ---------------------------------------------------------------------------
 # Model singletons
 # ---------------------------------------------------------------------------

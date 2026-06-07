@@ -2,7 +2,7 @@ import { mkdirSync, existsSync, readFileSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { Demucs } from './../../ml/demucs/demucs.ts';
-import { readEnginesConfig, REPO_ROOT } from '@repo/config';
+import { readEnginesConfig, REPO_ROOT, pythonBin } from '../config/engines.ts';
 import { MLDaemon } from '../../ml/daemon/client.ts';
 import { nowISO, updateStageDB, ffmpeg, emitLog } from './utils.ts';
 
@@ -74,13 +74,13 @@ async function separateOrt(taskId: string, sessionPath: string, videoPath: strin
 
 async function separatePytorch(taskId: string, sessionPath: string, videoPath: string, device: string) {
   const scriptPath = join(REPO_ROOT, 'packages', 'cli', 'scripts', 'separate', 'run.py');
-  const pythonBin = join(REPO_ROOT, '.venv', 'bin', 'python');
+  const pyBin = pythonBin();
   const pythonArgs = [scriptPath, videoPath, resolve(REPO_ROOT, sessionPath), '--device', device];
 
   emitLog(taskId, `[Separate] runtime=pytorch device=${device}`);
 
   return new Promise<void>((resolve, reject) => {
-    const proc = spawn(pythonBin, pythonArgs);
+    const proc = spawn(pyBin, pythonArgs);
 
     let stderr = '';
 

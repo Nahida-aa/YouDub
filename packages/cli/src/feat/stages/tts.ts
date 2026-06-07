@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, readdirSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
-import { REPO_ROOT, readEnginesConfig } from '@repo/config';
-import type { TTSEngineConfig } from '@repo/config';
+import { readEnginesConfig, REPO_ROOT, pythonBin } from '../config/engines.ts';
+import type { TTSEngineConfig } from '../config/types.ts';
 import { MLDaemon } from '../../ml/daemon/client.ts';
 import { VoxCPMNodeONNX, VoxCPMCloud, VoxCPMPython, writeWav } from '@repo/voxlab';
 import { readTaskLanguages, emitLog, nowISO, updateStageDB } from './utils.ts';
@@ -24,11 +24,11 @@ async function runPytorchBatch(
 ) {
   const scriptPath = join(REPO_ROOT, 'packages', 'voxlab', 'scripts', 'voxcpm_infer_batch.py');
   const modelDir = join(REPO_ROOT, 'data', 'modelscope', 'OpenBMB__VoxCPM2');
-  const pythonBin = join(REPO_ROOT, '.venv', 'bin', 'python');
+  const pyBin = pythonBin();
   const voxcpmSrc = join(REPO_ROOT, 'submodule', 'VoxCPM', 'src');
 
   return new Promise<void>((resolve, reject) => {
-    const proc = spawn(pythonBin, [
+    const proc = spawn(pyBin, [
       scriptPath,
       '--model-dir', modelDir,
       '--translation-file', translationFile,

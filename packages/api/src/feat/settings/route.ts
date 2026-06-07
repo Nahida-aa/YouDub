@@ -4,7 +4,7 @@ import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 import OpenAI from 'openai';
 import { z } from 'zod';
-import { REPO_ROOT } from '#/config/config.ts';
+import { REPO_ROOT } from '@repo/config';
 import { get_youtube_cookie } from '#/feat/settings/cookie.ts';
 import {
 	get_openai_settings,
@@ -17,7 +17,7 @@ import {
 	saveOpenAISettingsSchema,
 } from '#/feat/settings/schema.ts';
 import { zv } from '#/hono/validator.ts';
-import { normalizeOpenAIBaseUrl } from '#/ml/openai/url.ts';
+import { normalizeOpenAIBaseUrl } from '@repo/cli/src/ml/openai/url.ts';
 
 const app = new Hono()
 	.get('/get_youtube_cookie', async (c) => {

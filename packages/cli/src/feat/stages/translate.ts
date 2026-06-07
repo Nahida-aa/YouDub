@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { env, readEnginesConfig } from '@repo/config';
+import { env } from '@repo/config';
+import { readEnginesConfig } from '../config/engines.ts';
 import { readTaskLanguages, translationFilePath, emitLog, nowISO, updateStageDB, LANG_NAMES } from './utils.ts';
 
 export async function stageTranslate(taskId: string, sessionPath: string) {

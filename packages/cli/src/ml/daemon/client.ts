@@ -1,7 +1,7 @@
 import { spawn, ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
-import { REPO_ROOT } from '@repo/config';
+import { REPO_ROOT, pythonBin, delimiter } from '../../feat/config/engines.ts';
 
 type ProgressCallback = (current: number, total: number) => void;
 
@@ -21,16 +21,24 @@ export class MLDaemon {
     return this._ready;
   }
 
+  get pid(): number | null {
+    return this.proc?.pid ?? null;
+  }
+
+  get exited(): boolean {
+    return this.proc?.exitCode != null;
+  }
+
   async start(timeoutMs = 30000): Promise<void> {
-    const pythonBin = join(REPO_ROOT, '.venv', 'bin', 'python');
+    const pyBin = pythonBin();
     const scriptPath = join(REPO_ROOT, 'packages', 'cli', 'scripts', 'pipeline_daemon.py');
     const voxcpmSrc = join(REPO_ROOT, 'submodule', 'VoxCPM', 'src');
 
     const env: Record<string, string> = { ...process.env as Record<string, string> };
     const existing = env.PYTHONPATH || '';
-    env.PYTHONPATH = existing ? `${voxcpmSrc}:${existing}` : voxcpmSrc;
+    env.PYTHONPATH = existing ? `${voxcpmSrc}${delimiter}${existing}` : voxcpmSrc;
 
-    this.proc = spawn(pythonBin, [scriptPath], { env, stdio: ['pipe', 'pipe', 'pipe'] });
+    this.proc = spawn(pyBin, [scriptPath], { env, stdio: ['pipe', 'pipe', 'pipe'] });
 
     this.proc.on('exit', (code) => {
       this._ready = false;

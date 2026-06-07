@@ -2,6 +2,8 @@
   "name": "@repo/cli",
   "private": true,
   "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsgo --noEmit",
         "db:pull": "drizzle-kit pull",

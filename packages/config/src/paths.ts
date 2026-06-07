@@ -8,6 +8,7 @@ export const MODEL_CACHE_DIR = env.MODEL_CACHE_DIR;
 export const COOKIE_DIR = join(DATA_DIR, 'cookies');
 export const YOUTUBE_COOKIE_PATH = join(COOKIE_DIR, 'youtube.txt');
 export const LOG_DIR = join(DATA_DIR, 'logs');
+export const SESSION_DIR = join(DATA_DIR, 'sessions');
 
 export const VOXCPM_DIR = join(MODEL_CACHE_DIR, 'OpenBMB__VoxCPM2');
 export const WHISPER_ONNX_DIR = join(MODEL_CACHE_DIR, 'whisper-large-v3-turbo');
