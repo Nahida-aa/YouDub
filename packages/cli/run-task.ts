@@ -58,7 +58,8 @@ type Command =
 	| 'createTask'
 	| 'deviceInfo'
 	| 'daemon'
-	| 'daemonStatus';
+	| 'daemonStatus'
+	| 'daemonStop';
 
 const config = JSON.parse(readFileSync('./config.json', 'utf-8')) as {
 	command?: Command;
@@ -71,6 +72,7 @@ const config = JSON.parse(readFileSync('./config.json', 'utf-8')) as {
 	deviceInfo?: Record<string, never>;
 	stages?: Record<string, any>;
 	daemonPort?: number;
+	daemonIdleTimeout?: number;
 };
 
 const cmd: Command = config.command ?? 'startTask';
@@ -144,6 +146,23 @@ switch (cmd) {
 			console.log(JSON.stringify({ alive: true, port: DAEMON_PORT }));
 		} catch {
 			console.log(JSON.stringify({ alive: false, port: DAEMON_PORT, message: 'Connection failed (daemon not running)' }));
+		}
+		break;
+	}
+
+	case 'daemonStop': {
+		try {
+			await new Promise<void>((resolve, reject) => {
+				const sock = connect(DAEMON_PORT, '127.0.0.1', () => {
+					sock.write(JSON.stringify({ action: 'shutdown' }) + '\n');
+					resolve();
+				});
+				sock.on('error', reject);
+				sock.setTimeout(2000, () => { sock.destroy(); reject(new Error('timeout')); });
+			});
+			console.log(JSON.stringify({ stopped: true, port: DAEMON_PORT }));
+		} catch {
+			console.log(JSON.stringify({ stopped: false, port: DAEMON_PORT, message: 'Connection failed (daemon not running)' }));
 		}
 		break;
 	}
@@ -341,7 +360,8 @@ switch (cmd) {
 		}
 
 		const daemonPort = config.daemonPort ?? 19109;
-		const server = new DaemonServer(daemonPort, mlDaemon!);
+		const idleTimeout = config.daemonIdleTimeout ?? 300;
+		const server = new DaemonServer(daemonPort, mlDaemon!, idleTimeout);
 		await server.start();
 
 		process.stdin.resume();
