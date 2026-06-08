@@ -1,9 +1,9 @@
 import { existsSync, writeFileSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { REPO_ROOT, readEnginesConfig, pythonBin } from '../config/engines.ts';
+import { REPO_ROOT, readEnginesConfig } from '@repo/config';
 import { MLDaemon } from '../../ml/daemon/client.ts';
-import { readTaskLanguages, nowISO, updateStageDB, emitLog } from './utils.ts';
+import { readTaskLanguages, nowISO, updateStageDB, emitLog, pythonBin as getPythonBin } from './utils.ts';
 
 export async function stageAsr(taskId: string, sessionPath: string, daemon?: MLDaemon) {
   await updateStageDB(taskId, 'asr', { last_message: 'Transcribing...', progress: 0 });
@@ -16,7 +16,7 @@ export async function stageAsr(taskId: string, sessionPath: string, daemon?: MLD
   const { runtime, device } = engines.asr;
   emitLog(taskId, `[ASR] runtime=${runtime} device=${device}`);
 
-  const pyBin = pythonBin();
+  const pythonBin = getPythonBin();
   const { asrLanguage } = readTaskLanguages(sessionPath);
 
   if (runtime === 'pytorch' && daemon?.ready) {
@@ -27,7 +27,7 @@ export async function stageAsr(taskId: string, sessionPath: string, daemon?: MLD
       language: asrLanguage || 'auto',
       device,
     });
-    const r = result as Record<string, any>;
+    const r = result as Record<string, string>;
     if (r.detected_language) {
       const localInfoPath = join(sessionAbsPath, 'metadata', 'local_info.json');
       let local: any = {};
@@ -35,23 +35,19 @@ export async function stageAsr(taskId: string, sessionPath: string, daemon?: MLD
       local.asr_language = r.detected_language;
       writeFileSync(localInfoPath, JSON.stringify(local, null, 2));
     }
-    if (r.load_time_s) emitLog(taskId, `[ASR] Model loaded in ${r.load_time_s}s`);
-    if (r.process_time_s) emitLog(taskId, `[ASR] Transcribed in ${r.process_time_s}s`);
-    if (r.audio_duration_s) emitLog(taskId, `[ASR] Audio duration ${Number(r.audio_duration_s).toFixed(1)}s`);
-    if (r.rtf) emitLog(taskId, `[ASR] RTF ${r.rtf}`);
   } else if (runtime === 'pytorch') {
-    await asrPytorch(taskId, vocalsPath, sessionAbsPath, asrLanguage, device, pyBin);
+    await asrPytorch(taskId, vocalsPath, sessionAbsPath, asrLanguage, device, pythonBin);
   } else {
-    await asrFasterWhisper(taskId, vocalsPath, sessionAbsPath, asrLanguage, device, pyBin);
+    await asrFasterWhisper(taskId, vocalsPath, sessionAbsPath, asrLanguage, device, pythonBin);
   }
 
   await updateStageDB(taskId, 'asr', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Transcribed' });
 }
 
-async function asrPytorch(taskId: string, vocalsPath: string, sessionAbsPath: string, language: string | undefined, device: string, pyBin: string) {
+async function asrPytorch(taskId: string, vocalsPath: string, sessionAbsPath: string, language: string | undefined, device: string, pythonBin: string) {
   const script = join(REPO_ROOT, 'packages', 'cli', 'scripts', 'asr', 'pytorch.py');
   const args = [script, vocalsPath, sessionAbsPath, language || 'auto', '--device', device];
-  const result = spawnSync(pyBin, args, { maxBuffer: 256 * 1024 * 1024, timeout: 600_000 });
+  const result = spawnSync(pythonBin, args, { maxBuffer: 256 * 1024 * 1024, timeout: 600_000 });
 
   if (result.error) throw new Error(`Python ASR subprocess failed: ${result.error.message}`);
   if (result.signal) throw new Error(`ASR killed by signal ${result.signal}: ${(result.stderr?.toString() || '').trim().slice(-200)}`);
@@ -80,7 +76,7 @@ function parseAsrOutput(stdout: string): string | null {
   return stdout.trim() || null;
 }
 
-async function asrFasterWhisper(taskId: string, vocalsPath: string, sessionAbsPath: string, language: string | undefined, device: string, pyBin: string) {
+async function asrFasterWhisper(taskId: string, vocalsPath: string, sessionAbsPath: string, language: string | undefined, device: string, pythonBin: string) {
   const asrScript = join(REPO_ROOT, 'packages', 'cli', 'scripts', 'asr', 'run.py');
   const baseArgs = [asrScript, vocalsPath, sessionAbsPath, language || 'auto'];
 
@@ -89,7 +85,7 @@ async function asrFasterWhisper(taskId: string, vocalsPath: string, sessionAbsPa
 
   for (let attempt = 0; attempt < attempts; attempt++) {
     const args = attempt === 0 && useGpu ? baseArgs : [...baseArgs, '--cpu'];
-    const result = spawnSync(pyBin, args, {
+    const result = spawnSync(pythonBin, args, {
       maxBuffer: 256 * 1024 * 1024,
       timeout: 600_000,
     });

@@ -1,7 +1,8 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { nowISO, updateStageDB, updateTaskDB, srtTime, ffmpeg, readTaskLanguages, translationFilePath } from './utils.ts';
+import { join, resolve } from 'node:path';
+
+
+import { nowISO, updateStageDB, updateTaskDB, srtTime, ffmpeg, ffprobe, readTaskLanguages, translationFilePath } from './utils.ts';
 
 function writeSrt(translation: any[], dstLang: string, outputPath: string) {
   const CLOSING_QUOTES = new Set(['"', "'", '」', '』', '》', '）', '】', '\u201d', '\u2019', ']']);
@@ -103,7 +104,7 @@ function dstLangFromTranslation(translation: any[]): string {
 }
 
 function probeStyle(videoFile: string, dstLang: string, overrides?: { fontSize?: number; marginV?: number; alignment?: number; outline?: number; shadow?: number }): string {
-  const probe = spawnSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', videoFile], { stdio: ['pipe', 'pipe', 'pipe'] });
+  const probe = ffprobe(['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', videoFile]);
   const sizeStr = probe.stdout.toString().trim();
   const [wStr, hStr] = sizeStr.split(',');
   const width = parseInt(wStr), height = parseInt(hStr);
@@ -117,7 +118,14 @@ function probeStyle(videoFile: string, dstLang: string, overrides?: { fontSize?:
   return `FontName=${font},FontSize=${fontSize},PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=${outline > 0 ? 1 : 0},Outline=${outline},Shadow=${shadow},Alignment=${alignment},MarginV=${marginV}`;
 }
 
+function escapeSubPath(p: string): string {
+  let s = p.replace(/\\/g, '/');
+  if (process.platform === 'win32') s = s.replace(/:/, '\\:');
+  return s.replace(/'/g, "'\\''");
+}
+
 export async function stageMergeVideo(taskId: string, sessionPath: string) {
+  sessionPath = resolve(sessionPath);
   const mediaDir = join(sessionPath, 'media');
   const tmpDir = join(sessionPath, 'tmp');
   const metadataDir = join(sessionPath, 'metadata');
@@ -145,10 +153,10 @@ export async function stageMergeVideo(taskId: string, sessionPath: string) {
     const subPath = join(metadataDir, `subtitles.${dstLang}.srt`);
     writeSrt(data.translation, dstLang, subPath);
     const style = probeStyle(videoFile, dstLang, stageOverrides);
-    const escapedSub = subPath.replace(/'/g, "'\\\\''").replace(/'/g, "'\\''");
+    const escapedSub = escapeSubPath(subPath);
 
     ffmpeg(['-i', videoFile,
-      '-vf', `subtitles='${escapedSub}':force_style='${style}'`,
+      '-vf', `subtitles=filename='${escapedSub}':force_style='${style}'`,
       '-map', '0:v:0', '-map', '0:a:0',
       '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
       '-c:a', 'copy', '-movflags', '+faststart',
@@ -166,15 +174,15 @@ export async function stageMergeVideo(taskId: string, sessionPath: string) {
     const subPath = join(metadataDir, `subtitles.${dstLang}.srt`);
     writeSrt(data.translation, dstLang, subPath);
     const style = probeStyle(videoFile, dstLang, stageOverrides);
-    const escapedSub = subPath.replace(/'/g, "'\\\\''").replace(/'/g, "'\\''");
+    const escapedSub = escapeSubPath(subPath);
 
     const mixedAudio = join(tmpDir, 'audio_mixed.m4a');
     ffmpeg(['-i', dubbingFile, '-i', bgmFile, '-filter_complex',
-      '[0:a]volume=1.0[a0];[1:a]volume=0.30[a1];[a0][a1]amix=inputs=2:duration=longest:normalize=0[aout]',
+      '[0:a]volume=1.0[a0];[1:a]volume=0.30[a1];[a0][a1]amix=inputs=2:duration=longest[aout]',
       '-map', '[aout]', '-c:a', 'aac', mixedAudio]);
 
     ffmpeg(['-i', videoFile, '-i', mixedAudio,
-      '-vf', `subtitles='${escapedSub}':force_style='${style}'`,
+      '-vf', `subtitles=filename='${escapedSub}':force_style='${style}'`,
       '-map', '0:v:0', '-map', '1:a:0',
       '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
       '-c:a', 'aac', '-movflags', '+faststart', '-shortest',

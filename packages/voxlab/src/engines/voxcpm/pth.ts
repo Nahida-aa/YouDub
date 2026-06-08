@@ -3,7 +3,6 @@ import { existsSync } from 'node:fs';
 import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { delimiter } from 'node:path';
 import { readWav } from '../../wav.ts';
 import type { TTSGenerateOptions, TTSGenerateResult, TTSBackend, VoxCPMPythonConfig, ModelStatus } from '../../types.ts';
 import { VOXCPM_DIR, REPO_ROOT } from '@repo/config';
@@ -22,12 +21,8 @@ export class VoxCPMPython implements TTSBackend {
 
   constructor(config: VoxCPMPythonConfig = {}) {
     this.modelDir = config.modelDir ?? VOXCPM_DIR;
-    if (config.python) {
-      this.pythonBin = config.python;
-    } else {
-      const isWin = process.platform === 'win32';
-      this.pythonBin = join(REPO_ROOT, '.venv', isWin ? 'Scripts' : 'bin', isWin ? 'python.exe' : 'python');
-    }
+    const base = config.python ?? join(REPO_ROOT, '.venv', 'bin', 'python');
+    this.pythonBin = process.platform === 'win32' ? base + '.cmd' : base;
   }
 
   async load(): Promise<void> {

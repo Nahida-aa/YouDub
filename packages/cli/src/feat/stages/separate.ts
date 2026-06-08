@@ -1,16 +1,30 @@
-import { mkdirSync, existsSync } from 'node:fs';
+import { mkdirSync, existsSync, readFileSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { Demucs } from './../../ml/demucs/demucs.ts';
-import { readEnginesConfig, REPO_ROOT, pythonBin } from '../config/engines.ts';
+import { readEnginesConfig, REPO_ROOT } from '@repo/config';
 import { MLDaemon } from '../../ml/daemon/client.ts';
-import { nowISO, updateStageDB, ffmpeg, emitLog } from './utils.ts';
+import { nowISO, updateStageDB, ffmpeg, emitLog, pythonBin as getPythonBin } from './utils.ts';
 
 export async function stageSeparate(taskId: string, sessionPath: string, daemon?: MLDaemon) {
   await updateStageDB(taskId, 'separate', { last_message: 'Separating audio...', progress: 0 });
 
   const videoPath = join(sessionPath, 'media', 'video_source.mp4');
   if (!existsSync(videoPath)) throw new Error('video_source.mp4 not found');
+
+  let mode = 'dub';
+  try {
+    const info = JSON.parse(readFileSync(join(sessionPath, 'metadata', 'local_info.json'), 'utf-8'));
+    mode = info.mode || 'dub';
+  } catch { /* use default */ }
+
+  if (mode === 'subtitle') {
+    const audioPath = join(sessionPath, 'media', 'audio_vocals.wav');
+    ffmpeg(['-i', videoPath, '-acodec', 'pcm_s16le', '-ar', '44100', '-ac', '2', audioPath]);
+    emitLog(taskId, `[Separate] subtitle mode — extracted audio only (no Demucs)`);
+    await updateStageDB(taskId, 'separate', { status: 'succeeded', completed_at: nowISO(), progress: 100, last_message: 'Audio extracted' });
+    return;
+  }
 
   const engines = readEnginesConfig();
   const { runtime, device } = engines.separate;
@@ -19,19 +33,13 @@ export async function stageSeparate(taskId: string, sessionPath: string, daemon?
     emitLog(taskId, `[Separate] Using Python daemon (device=${device})`);
     const absSession = resolve(REPO_ROOT, sessionPath);
     const absVideo = resolve(REPO_ROOT, sessionPath, 'media', 'video_source.mp4');
-    const result = await daemon.runStage('separate', taskId, {
+    await daemon.runStage('separate', taskId, {
       video_path: absVideo,
       session_path: absSession,
       device,
     }, (current, _total) => {
-      emitLog(taskId, `[Separate] ${current}%`);
       updateStageDB(taskId, 'separate', { progress: current, last_message: `Separating ${current}%...` });
     });
-    const sr = result as Record<string, number>;
-    if (sr.load_time_s) emitLog(taskId, `[Separate] Model loaded in ${sr.load_time_s}s`);
-    if (sr.process_time_s) emitLog(taskId, `[Separate] Processed in ${sr.process_time_s}s`);
-    if (sr.audio_duration_s) emitLog(taskId, `[Separate] Audio duration ${sr.audio_duration_s.toFixed(1)}s`);
-    if (sr.rtf) emitLog(taskId, `[Separate] RTF ${sr.rtf}`);
   } else if (runtime === 'pytorch') {
     await separatePytorch(taskId, sessionPath, videoPath, device);
   } else {
@@ -66,13 +74,13 @@ async function separateOrt(taskId: string, sessionPath: string, videoPath: strin
 
 async function separatePytorch(taskId: string, sessionPath: string, videoPath: string, device: string) {
   const scriptPath = join(REPO_ROOT, 'packages', 'cli', 'scripts', 'separate', 'run.py');
-  const pyBin = pythonBin();
+  const pythonBin = getPythonBin();
   const pythonArgs = [scriptPath, videoPath, resolve(REPO_ROOT, sessionPath), '--device', device];
 
   emitLog(taskId, `[Separate] runtime=pytorch device=${device}`);
 
   return new Promise<void>((resolve, reject) => {
-    const proc = spawn(pyBin, pythonArgs);
+    const proc = spawn(pythonBin, pythonArgs);
 
     let stderr = '';
 

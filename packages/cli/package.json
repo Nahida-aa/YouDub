@@ -6,12 +6,13 @@
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsgo --noEmit",
-        "db:pull": "drizzle-kit pull",
+    "db:pull": "drizzle-kit pull",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "run": "bun run-task.ts"
   },
   "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@repo/config": "workspace:*",
     "@repo/device": "workspace:*",
     "@repo/shared": "workspace:*",

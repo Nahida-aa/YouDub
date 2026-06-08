@@ -1,11 +1,16 @@
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, resolve, dirname } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { db } from './../../db/index.ts';
 import { eq, sql } from 'drizzle-orm';
 import { tasks, taskStages } from './../../feat/tasks/table.ts';
 import { getStages } from './../../feat/tasks/stages.ts';
-import { LOG_DIR, WORKFOLDER, REPO_ROOT } from '@repo/config';
+import { LOG_DIR, WORKFOLDER, REPO_ROOT, env } from '@repo/config';
+
+function spawnOpts(timeout: number, toolPath: string): { stdio: ['pipe', 'pipe', 'pipe']; timeout: number; cwd?: string } {
+  // shared FFmpeg builds need cwd set to bin dir for DLL resolution on Windows
+  return { stdio: ['pipe', 'pipe', 'pipe'], timeout, cwd: dirname(toolPath) };
+}
 
 export function nowISO(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, '');
@@ -92,9 +97,29 @@ export function emitLog(taskId: string, line: string) {
 }
 
 export function ffmpeg(args: string[], timeout = 120_000) {
-  const r = spawnSync('ffmpeg', ['-y', ...args], { stdio: ['pipe', 'pipe', 'pipe'], timeout });
+  const cmd = env.FFMPEG_PATH || 'ffmpeg';
+  const normalized = args.map(a => a.replace(/\\(?!:)/g, '/'));
+  const r = spawnSync(cmd, ['-hide_banner', '-y', ...normalized], spawnOpts(timeout, cmd));
   if (r.error) throw new Error(`ffmpeg: ${r.error.message}`);
-  if (r.status !== 0) throw new Error(`ffmpeg exit ${r.status}: ${r.stderr.toString().slice(0, 300)}`);
+  if (r.status !== 0) {
+    const errText = r.stderr.toString();
+    console.error(`[ffmpeg] cmd=${cmd} status=${r.status} stderr=${errText}`);
+    throw new Error(`ffmpeg exit ${r.status}: ${errText}`);
+  }
+}
+
+export function ffprobe(args: string[], timeout = 30_000) {
+  const cmd = env.FFPROBE_PATH || 'ffprobe';
+  const normalized = args.map(a => a.replace(/\\(?!:)/g, '/'));
+  const r = spawnSync(cmd, normalized, spawnOpts(timeout, cmd));
+  if (r.error) throw new Error(`ffprobe spawn error: ${r.error.message}`);
+  if (r.status !== 0) throw new Error(`ffprobe exit ${r.status}: ${(r.stderr?.toString() ?? '').slice(0, 300)}`);
+  return r;
+}
+
+export function pythonBin(): string {
+  const base = join(REPO_ROOT, '.venv', 'bin', 'python');
+  return process.platform === 'win32' ? base + '.cmd' : base;
 }
 
 export async function currentTask(taskId: string) {

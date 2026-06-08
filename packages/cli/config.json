@@ -1,26 +1,19 @@
 {
   "$schema": "./config.schema.json",
-  "mode": "dub",
-  "command": "resumeTask",
-  "resumeTask": {
-    "taskId": "VLmkCww00z",
-    "resumeFrom": "merge_video"
-  },
+  "command": "rerunStage",
+  "rerunStage": { "taskId": "mq4prhw509", "stageName": "merge_video" },
+
   "engines": {
     "separate": {
-      "runtime": "pytorch",
-      "device": "cpu"
+      "runtime": "ort",
+      "device": "cuda"
     },
     "asr": {
       "runtime": "faster-whisper",
       "device": "cuda"
     },
-    "translate": {
-      "apiBase": "http://localhost:11434/v1",
-      "model": "gemma4:31b-cloud"
-    },
     "tts": {
-      "runtime": "cloud",
+      "runtime": "pytorch",
       "device": "cpu"
     }
   },
@@ -30,7 +23,7 @@
     },
     "merge_video": {
       "fontSize": 19,
-      "marginV": 34
+      "marginV":34
     }
   }
 }
