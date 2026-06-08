@@ -3,6 +3,9 @@ export interface TTSGenerateOptions {
   text: string;
   referenceWavPath: string;
   cfgValue?: number;
+  maxPatches?: number;
+  /** Original-language transcription of the reference audio (used by cloud backend for voice cloning quality) */
+  promptText?: string;
 }
 
 /** Result from TTSBackend.generate() — includes timing breakdown */

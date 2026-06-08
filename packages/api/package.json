@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@hono/zod-validator": "^0.8.0",
+    "@repo/cli": "workspace:*",
     "@repo/config": "workspace:*",
     "@repo/device": "workspace:*",
     "@repo/shared": "workspace:*",

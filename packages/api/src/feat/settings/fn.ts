@@ -1,13 +1,13 @@
 import { aq } from 'agnostic-query';
 import { toDb0 } from 'agnostic-query/db0/sqlite.js';
-import { openaiDefaults, ytdlpDefaults } from '#/config/config.ts';
+import { openaiDefaults, ytdlpDefaults } from '@repo/config';
 import { db, sql } from '#/db/index.ts';
 import type {
 	SaveOpenAISettingsInput,
 	Settings,
 } from '#/feat/settings/schema.ts';
 import { settings } from '#/feat/settings/table.ts';
-import { normalizeOpenAIBaseUrl } from '#/ml/openai/url.ts';
+import { normalizeOpenAIBaseUrl } from '@repo/cli/src/ml/openai/url.ts';
 
 // 1. 重载一：当传了必填的默认值时，返回值绝对没有 undefined，直接就是 T
 export async function get_setting<T extends string | number>(

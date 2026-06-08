@@ -1,23 +1,24 @@
 import type { Socket, TCPSocketListener } from 'bun';
-import { existsSync, mkdirSync, writeFileSync, unlinkSync } from 'node:fs';
-import { join } from 'node:path';
-import { REPO_ROOT } from '@repo/config';
 import { MLDaemon } from './client.ts';
 import { setActiveConn } from './active.ts';
+import { readEnginesConfig } from '../../feat/config/engines.ts';
 import { runPipeline } from '../../feat/tasks/pipeline-runner.ts';
-
-const DAEMON_INFO = join(REPO_ROOT, 'data', 'daemon.json');
 
 export class DaemonServer {
   private port: number;
   private mlDaemon: MLDaemon;
+  private idleTimeout: number;
+  private lastActivity: number;
+  private idleTimer: ReturnType<typeof setInterval> | null = null;
   private server: TCPSocketListener<{ buffer: string }> | null = null;
   private queue: { conn: Socket<unknown>; taskId: string }[] = [];
   private busy = false;
 
-  constructor(port: number, mlDaemon: MLDaemon) {
+  constructor(port: number, mlDaemon: MLDaemon, idleTimeout = 300) {
     this.port = port;
     this.mlDaemon = mlDaemon;
+    this.idleTimeout = idleTimeout;
+    this.lastActivity = Date.now();
   }
 
   async start(): Promise<void> {
@@ -55,15 +56,29 @@ export class DaemonServer {
       },
     });
 
-    mkdirSync(join(REPO_ROOT, 'data'), { recursive: true });
-    writeFileSync(DAEMON_INFO, JSON.stringify({ port: this.server.port, pid: process.pid }, null, 2));
-    console.log(`[DaemonServer] listening on 127.0.0.1:${this.server.port} (pid ${process.pid})`);
+    if (this.idleTimeout > 0) {
+      this.idleTimer = setInterval(() => this._checkIdle(), 30_000);
+    }
+
+    console.log(
+      `[DaemonServer] listening on 127.0.0.1:${this.port} (pid ${process.pid})` +
+      (this.idleTimeout > 0 ? ` idle timeout=${this.idleTimeout}s` : ''),
+    );
   }
 
   async stop(): Promise<void> {
+    if (this.idleTimer) clearInterval(this.idleTimer);
     try { this.server?.stop(true); } catch {}
-    try { unlinkSync(DAEMON_INFO); } catch {}
     process.exit(0);
+  }
+
+  private _checkIdle(): void {
+    if (this.busy || this.queue.length > 0) return;
+    const elapsed = (Date.now() - this.lastActivity) / 1000;
+    if (elapsed >= this.idleTimeout) {
+      console.log(`[DaemonServer] idle for ${elapsed.toFixed(0)}s, shutting down`);
+      this.stop();
+    }
   }
 
   private async _processQueue(): Promise<void> {
@@ -81,6 +96,7 @@ export class DaemonServer {
     } finally {
       setActiveConn(null);
       this.busy = false;
+      this.lastActivity = Date.now();
       this._processQueue();
     }
   }

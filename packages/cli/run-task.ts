@@ -1,6 +1,6 @@
 import { createInterface } from 'node:readline';
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync, unlinkSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { connect } from 'node:net';
 import type { Socket } from 'node:net';
@@ -10,8 +10,8 @@ import {
 	WORKFOLDER,
 	YOUTUBE_COOKIE_PATH,
 	env,
-	readEnginesConfig,
 } from '@repo/config';
+import { readEnginesConfig } from './src/feat/config/engines.ts';
 import { db } from './src/db/index.ts';
 import { MLDaemon } from './src/ml/daemon/client.ts';
 import { DaemonServer } from './src/ml/daemon/server.ts';
@@ -26,16 +26,10 @@ import { tasks } from './src/feat/tasks/table.ts';
 import { extractVideoId, isYouTubeUrl } from './src/feat/tasks/validate.ts';
 import { timeId } from '../shared/db/timeId.ts';
 
-const DAEMON_INFO = join(REPO_ROOT, 'data', 'daemon.json');
-
-function connectToDaemon(): Promise<Socket | null> {
+function connectToDaemon(port: number): Promise<Socket | null> {
   return new Promise((resolve) => {
     try {
-      if (!existsSync(DAEMON_INFO)) { resolve(null); return; }
-      const info = JSON.parse(readFileSync(DAEMON_INFO, 'utf-8'));
-      const conn = connect({ host: '127.0.0.1', port: info.port }, () => {
-        resolve(conn);
-      });
+      const conn = connect({ host: '127.0.0.1', port }, () => resolve(conn));
       conn.on('error', () => resolve(null));
     } catch {
       resolve(null);
@@ -63,12 +57,16 @@ type Command =
 	| 'taskStatus'
 	| 'createTask'
 	| 'deviceInfo'
-	| 'daemon';
+	| 'daemon'
+	| 'daemonStatus'
+	| 'daemonStop'
+	| 'listModels';
 
 const config = JSON.parse(readFileSync('./config.json', 'utf-8')) as {
 	command?: Command;
+	mode?: string;
 	startTask?: { taskId?: string };
-	createTask?: { youtubeUrl?: string; bilibiliUrl?: string; sourceFile?: string; sourceLang?: string; targetLang?: string; mode?: string; stages?: Record<string, any> };
+	createTask?: { youtubeUrl?: string; bilibiliUrl?: string; sourceFile?: string; sourceLang?: string; targetLang?: string; stages?: Record<string, any> };
 	resumeTask?: { taskId?: string; resumeFrom?: string };
 	rerunStage?: { taskId?: string; stageName?: string };
 	checkVideo?: { taskId?: string };
@@ -76,9 +74,11 @@ const config = JSON.parse(readFileSync('./config.json', 'utf-8')) as {
 	deviceInfo?: Record<string, never>;
 	stages?: Record<string, any>;
 	daemonPort?: number;
+	daemonIdleTimeout?: number;
 };
 
 const cmd: Command = config.command ?? 'startTask';
+const DAEMON_PORT = config.daemonPort ?? 19109;
 
 switch (cmd) {
 	case 'checkVideo': {
@@ -135,6 +135,64 @@ switch (cmd) {
 		break;
 	}
 
+	case 'daemonStatus': {
+		try {
+			await new Promise<void>((resolve, reject) => {
+				const sock = connect(DAEMON_PORT, '127.0.0.1', () => {
+					sock.end();
+					resolve();
+				});
+				sock.on('error', reject);
+				sock.setTimeout(2000, () => { sock.destroy(); reject(new Error('timeout')); });
+			});
+			console.log(JSON.stringify({ alive: true, port: DAEMON_PORT }));
+		} catch {
+			console.log(JSON.stringify({ alive: false, port: DAEMON_PORT, message: 'Connection failed (daemon not running)' }));
+		}
+		break;
+	}
+
+	case 'daemonStop': {
+		try {
+			await new Promise<void>((resolve, reject) => {
+				const sock = connect(DAEMON_PORT, '127.0.0.1', () => {
+					sock.write(JSON.stringify({ action: 'shutdown' }) + '\n');
+					resolve();
+				});
+				sock.on('error', reject);
+				sock.setTimeout(2000, () => { sock.destroy(); reject(new Error('timeout')); });
+			});
+			console.log(JSON.stringify({ stopped: true, port: DAEMON_PORT }));
+		} catch {
+			console.log(JSON.stringify({ stopped: false, port: DAEMON_PORT, message: 'Connection failed (daemon not running)' }));
+		}
+		break;
+	}
+
+	case 'listModels': {
+		const engines = readEnginesConfig();
+		const apiBase = engines.translate?.apiBase || env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+		const apiKey = env.OPENAI_API_KEY;
+		if (!apiKey) {
+			console.error('OPENAI_API_KEY not configured');
+			process.exit(1);
+		}
+		try {
+			const resp = await fetch(`${apiBase}/models`, {
+				headers: { Authorization: `Bearer ${apiKey}` },
+			});
+			if (!resp.ok) throw new Error(`API ${resp.status}: ${await resp.text()}`);
+			const data = await resp.json() as any;
+			for (const m of data.data || []) {
+				console.log(`  ${m.id}`);
+			}
+		} catch (err) {
+			console.error('listModels failed:', err);
+			process.exit(1);
+		}
+		break;
+	}
+
 	case 'createTask': {
 		const p = config.createTask ?? {};
 		const url = p.youtubeUrl ?? p.bilibiliUrl;
@@ -163,13 +221,14 @@ switch (cmd) {
 				}
 			}
 
+			const taskMode = config.mode ?? 'dub';
 			const [task] = await createTask({
 				url,
 				taskId: videoId,
 				sourceFile: p.sourceFile,
 				sourceLang: p.sourceLang,
 				targetLang: p.targetLang,
-				mode: p.mode,
+				mode: taskMode,
 				stages: config.stages,
 			});
 
@@ -211,7 +270,7 @@ switch (cmd) {
 			);
 
 			console.log(`\n[CLI] Running pipeline for task ${videoId}...`);
-			const conn = await connectToDaemon();
+			const conn = await connectToDaemon(DAEMON_PORT);
 			if (conn) {
 				await runViaTCPSocket(videoId, conn);
 				conn.end();
@@ -241,7 +300,7 @@ switch (cmd) {
 		break;
 	}
 
-	case 'resumeTask': {
+		case 'resumeTask': {
 		const taskId = config.resumeTask?.taskId;
 		if (!taskId) {
 			console.error('resumeTask.taskId required in config.json');
@@ -249,9 +308,27 @@ switch (cmd) {
 		}
 		const resumeFrom = config.resumeTask?.resumeFrom;
 		const label = resumeFrom ? ` from "${resumeFrom}"` : '';
+
+		// Allow mode switch on resume (e.g. subtitle → dub)
+		if (config.mode) {
+			const taskRows = await db.select({ session_path: tasks.session_path }).from(tasks).where(eq(tasks.id, taskId)).limit(1);
+			if (taskRows.length > 0) {
+				const sessionPath = taskRows[0].session_path
+					? resolve(REPO_ROOT, taskRows[0].session_path)
+					: join(WORKFOLDER, taskId);
+				const infoPath = join(sessionPath, 'metadata', 'local_info.json');
+				if (existsSync(infoPath)) {
+					const localInfo = JSON.parse(readFileSync(infoPath, 'utf-8'));
+					localInfo.mode = config.mode;
+					writeFileSync(infoPath, JSON.stringify(localInfo, null, 2));
+					console.log(`[CLI] Switched mode to "${config.mode}"`);
+				}
+			}
+		}
+
 		console.log(`[CLI] Resuming pipeline for task ${taskId}${label}...`);
 		try {
-			const conn = await connectToDaemon();
+			const conn = await connectToDaemon(DAEMON_PORT);
 			if (conn) {
 				await runViaTCPSocket(taskId, conn);
 				conn.end();
@@ -328,7 +405,8 @@ switch (cmd) {
 		}
 
 		const daemonPort = config.daemonPort ?? 19109;
-		const server = new DaemonServer(daemonPort, mlDaemon!);
+		const idleTimeout = config.daemonIdleTimeout ?? 300;
+		const server = new DaemonServer(daemonPort, mlDaemon!, idleTimeout);
 		await server.start();
 
 		process.stdin.resume();
@@ -345,7 +423,7 @@ switch (cmd) {
 		}
 		console.log(`[CLI] Starting pipeline for task ${taskId}...`);
 
-		const conn = await connectToDaemon();
+		const conn = await connectToDaemon(DAEMON_PORT);
 		if (conn) {
 			await runViaTCPSocket(taskId, conn);
 			conn.end();

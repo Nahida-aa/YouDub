@@ -30,6 +30,13 @@ import traceback
 import wave
 from pathlib import Path
 
+# Windows: ensure stdin/stdout use binary mode so JSON lines protocol
+# (newline-delimited) is not corrupted by \n → \r\n translation.
+if sys.platform == "win32":
+    import msvcrt  # noqa: PLC0415
+    msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)   # type: ignore[attr-defined]
+    msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)  # type: ignore[attr-defined]
+
 # ---------------------------------------------------------------------------
 # Model singletons
 # ---------------------------------------------------------------------------
@@ -142,15 +149,20 @@ def handle_asr(params: dict) -> dict:
     language = None if raw_language == "auto" else raw_language
     device = params.get("device", "cpu")
 
+    t0 = time.perf_counter()
     _load_whisper(device)
+    load_time = time.perf_counter() - t0
 
+    t1 = time.perf_counter()
     result = _WHISPER.transcribe(vocals_path, language=language, word_timestamps=False, verbose=False)
+    process_time = time.perf_counter() - t1
 
     utterances = _convert_segments(result.get("segments", []))
     if not utterances:
         raise RuntimeError("Whisper did not return any segments.")
 
     duration_ms = len(AudioSegment.from_file(vocals_path))
+    audio_duration_s = duration_ms / 1000.0
     payload = {
         "audio_info": {"duration": duration_ms},
         "result": {
@@ -165,7 +177,14 @@ def handle_asr(params: dict) -> dict:
     output_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     detected = result.get("language", "")
-    return {"asr_file": str(output_file), "detected_language": detected}
+    return {
+        "asr_file": str(output_file),
+        "detected_language": detected,
+        "load_time_s": round(load_time, 3),
+        "process_time_s": round(process_time, 3),
+        "audio_duration_s": round(audio_duration_s, 3),
+        "rtf": round(process_time / audio_duration_s, 3) if audio_duration_s > 0 else 0,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -183,13 +202,15 @@ def handle_tts(params: dict, task_id: str) -> dict:
 
     tts_dir.mkdir(parents=True, exist_ok=True)
 
+    t0 = time.perf_counter()
     _load_voxcpm(model_dir, device)
+    load_time = time.perf_counter() - t0
 
     data = json.loads(translation_file.read_text(encoding="utf-8"))
     items = data["translation"]
     total = len(items)
     if total == 0:
-        return {"generated": 0, "skipped": 0, "errors": 0, "generate_time_s": 0}
+        return {"generated": 0, "skipped": 0, "errors": 0, "generate_time_s": 0, "load_time_s": round(load_time, 3)}
 
     min_bytes = 1200 * 16 * 2
     fallback = ""
@@ -245,11 +266,14 @@ def handle_tts(params: dict, task_id: str) -> dict:
 
         _emit_progress("tts", task_id, index, total)
 
+    total_time = time.perf_counter() - t0
     return {
         "generated": generated,
         "skipped": skipped,
         "errors": errors,
         "generate_time_s": round(gen_time, 3),
+        "load_time_s": round(load_time, 3),
+        "total_time_s": round(total_time, 3),
     }
 
 
@@ -258,10 +282,13 @@ def handle_tts(params: dict, task_id: str) -> dict:
 # ---------------------------------------------------------------------------
 
 def handle_separate(params: dict, task_id: str) -> dict:
+    from pydub import AudioSegment
+
     video_path = params["video_path"]
     session_path = params["session_path"]
     device = params.get("device", "cpu")
 
+    t0 = time.perf_counter()
     Separator = _load_demucs(device)
 
     media_dir = Path(session_path) / "media"
@@ -282,7 +309,13 @@ def handle_separate(params: dict, task_id: str) -> dict:
         shifts=shifts,
         callback=report_progress,
     )
+    load_time = time.perf_counter() - t0
+
+    t1 = time.perf_counter()
     _, separated = separator.separate_audio_file(video_path)
+    process_time = time.perf_counter() - t1
+
+    audio_duration_s = len(AudioSegment.from_file(video_path)) / 1000.0
 
     vocals = separated["vocals"]
     bgm = None
@@ -296,7 +329,14 @@ def handle_separate(params: dict, task_id: str) -> dict:
     save_audio(vocals, str(vocals_file), samplerate=separator.samplerate)
     save_audio(bgm, str(bgm_file), samplerate=separator.samplerate)
 
-    return {"vocals_file": str(vocals_file), "bgm_file": str(bgm_file)}
+    return {
+        "vocals_file": str(vocals_file),
+        "bgm_file": str(bgm_file),
+        "load_time_s": round(load_time, 3),
+        "process_time_s": round(process_time, 3),
+        "audio_duration_s": round(audio_duration_s, 3),
+        "rtf": round(process_time / audio_duration_s, 3) if audio_duration_s > 0 else 0,
+    }
 
 
 # ---------------------------------------------------------------------------

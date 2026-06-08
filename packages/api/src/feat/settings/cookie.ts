@@ -1,7 +1,7 @@
 import { mkdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { to } from '@repo/shared/lib/utils/try';
-import { YOUTUBE_COOKIE_PATH } from '#/config/config.ts';
+import { YOUTUBE_COOKIE_PATH } from '@repo/config';
 
 export const get_youtube_cookie = async () => {
 	const [stats, err] = await to(stat(YOUTUBE_COOKIE_PATH));

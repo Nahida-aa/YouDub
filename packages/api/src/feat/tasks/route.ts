@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { REPO_ROOT, LOG_DIR } from '#/config/config.ts';
+import { REPO_ROOT, LOG_DIR } from '@repo/config';
 
 const app = new Hono()
 	.get(

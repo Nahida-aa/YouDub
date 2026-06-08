@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { Database } from 'bun:sqlite';
 
 import { drizzle } from 'drizzle-orm/bun-sqlite';
-import { env } from '#/config/env.ts';
+import { env } from '@repo/config';
 import * as schema from './schema.ts';
 
 export const sql = new Database(env.DB_FILE_NAME);
