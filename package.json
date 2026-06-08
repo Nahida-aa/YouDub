@@ -17,6 +17,7 @@
     "@biomejs/biome": "2.4.16"
   },
   "dependencies": {
+    "@ffprobe-installer/ffprobe": "^2.1.2",
     "agnostic-query": "^1.10.5",
     "onnxruntime-node-gpu": "1.14.0"
   }

@@ -21,7 +21,8 @@ export class VoxCPMPython implements TTSBackend {
 
   constructor(config: VoxCPMPythonConfig = {}) {
     this.modelDir = config.modelDir ?? VOXCPM_DIR;
-    this.pythonBin = config.python ?? join(REPO_ROOT, '.venv', 'bin', 'python');
+    const base = config.python ?? join(REPO_ROOT, '.venv', 'bin', 'python');
+    this.pythonBin = process.platform === 'win32' ? base + '.cmd' : base;
   }
 
   async load(): Promise<void> {

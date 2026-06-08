@@ -33,6 +33,14 @@ export const taskStagesCollect = createCollection(
 	}),
 );
 
+//调试入口命令
+if (typeof window !== 'undefined') {
+	Object.assign(window, {
+		__tasks: tasksCollect,
+		__stages: taskStagesCollect,
+	});
+}
+
 export type TasksRow = InferCollectionType<typeof tasksCollect>;
 
 export const tasksQ = (q: InitialQueryBuilder) =>
@@ -46,8 +54,7 @@ export const tasksQById = (id: string) => (q: InitialQueryBuilder) =>
 		.findOne();
 
 export const stagesQByTaskId = (taskId: string) => (q: InitialQueryBuilder) =>
-	q
-		.from({ stages: taskStagesCollect })
+	q.from({ stages: taskStagesCollect })
 		.where(({ stages }) => eq(stages.task_id, taskId))
 		.select(({ stages }) => stages);
 

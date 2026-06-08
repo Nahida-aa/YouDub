@@ -1,12 +1,14 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { readTaskLanguages, translationFilePath, ffmpeg, nowISO, updateStageDB } from './utils.ts';
+import { join, resolve, relative } from 'node:path';
+
+
+import { readTaskLanguages, translationFilePath, ffmpeg, ffprobe, nowISO, updateStageDB } from './utils.ts';
 
 export async function stageMergeAudio(taskId: string, sessionPath: string) {
+  sessionPath = resolve(sessionPath);
   const { targetLanguage: dstLangCode } = readTaskLanguages(sessionPath);
-  const translationFile = translationFilePath(sessionPath, dstLangCode);
-  const ttsDir = join(sessionPath, 'segments', 'tts');
+  const translationFile = resolve(sessionPath, translationFilePath(sessionPath, dstLangCode));
+  const ttsDir = resolve(sessionPath, 'segments', 'tts');
   const tmpDir = join(sessionPath, 'tmp');
   const stretchedDir = join(sessionPath, 'segments', 'stretched');
   const metadataDir = join(sessionPath, 'metadata');
@@ -30,12 +32,12 @@ export async function stageMergeAudio(taskId: string, sessionPath: string) {
     if (!existsSync(f)) throw new Error(`Missing TTS segment: ${f}`);
   }
 
-  const probe = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=sample_rate', '-of', 'csv=p=0', ttsFiles[0]], { stdio: ['pipe', 'pipe', 'pipe'] });
+  const probe = ffprobe( ['-v', 'error', '-show_entries', 'stream=sample_rate', '-of', 'csv=p=0', ttsFiles[0]]);
   const sampleRate = parseInt(probe.stdout.toString().trim()) || 48000;
 
   let curTotal = 0, desTotal = 0;
   for (let i = 0; i < translation.length; i++) {
-    const durProbe = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', ttsFiles[i]], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const durProbe = ffprobe( ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', ttsFiles[i]]);
     const dur = parseFloat(durProbe.stdout.toString().trim()) || 0;
     curTotal += dur;
     desTotal += Math.max(0, (translation[i].end_time - translation[i].start_time) / 1000);
@@ -65,7 +67,7 @@ export async function stageMergeAudio(taskId: string, sessionPath: string) {
     }
 
     if (!existsSync(stretchedFile)) {
-      const durProbe = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', ttsFile], { stdio: ['pipe', 'pipe', 'pipe'] });
+      const durProbe = ffprobe( ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', ttsFile]);
       const currentSec = parseFloat(durProbe.stdout.toString().trim()) || 0;
       const desiredSec = (segment.end_time - realStartMs) / 1000;
 
@@ -82,7 +84,7 @@ export async function stageMergeAudio(taskId: string, sessionPath: string) {
 
     segmentInputs.push(stretchedFile);
 
-    const segProbe = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', stretchedFile], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const segProbe = ffprobe( ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', stretchedFile]);
     const adjustedSec = parseFloat(segProbe.stdout.toString().trim()) || 0;
     const realEndMs = Math.max(realStartMs + adjustedSec * 1000, segment.end_time);
     lastEndMs = realEndMs;
@@ -94,7 +96,7 @@ export async function stageMergeAudio(taskId: string, sessionPath: string) {
   if (segmentInputs.length === 0) throw new Error('No audio segments to merge');
 
   const concatFile = join(tmpDir, 'concat_list.txt');
-  writeFileSync(concatFile, segmentInputs.map(f => `file '${f}'`).join('\n'));
+  writeFileSync(concatFile, segmentInputs.map(f => `file '${relative(tmpDir, f).replace(/\\/g, '/')}'`).join('\n'));
   ffmpeg(['-f', 'concat', '-safe', '0', '-i', concatFile, '-acodec', 'pcm_s16le', '-ar', String(sampleRate), '-ac', '1', dubbingFile]);
 
   writeFileSync(timingsFile, JSON.stringify({ translation }, null, 2));

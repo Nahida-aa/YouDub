@@ -1,14 +1,12 @@
 {
   "$schema": "./config.schema.json",
-  "command": "createTask",
-  "createTask": {
-    "sourceFile": "https://github.com/user-attachments/assets/bd02936f-cf3c-4e4b-85b5-0410d38f69f5",
-    "targetLang": "zh"
-  },
-  "engines": {  
+  "command": "rerunStage",
+  "rerunStage": { "taskId": "mq4prhw509", "stageName": "merge_video" },
+
+  "engines": {
     "separate": {
-      "runtime": "pytorch",
-      "device": "cpu"
+      "runtime": "ort",
+      "device": "cuda"
     },
     "asr": {
       "runtime": "faster-whisper",
@@ -21,7 +19,7 @@
   },
   "stages": {
     "translate": {
-      "targetLang": "zh"
+      "targetLang": "vi"
     },
     "merge_video": {
       "fontSize": 19,
@@ -29,3 +27,5 @@
     }
   }
 }
+
+

@@ -2,6 +2,7 @@ import { spawn, ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
 import { REPO_ROOT } from '@repo/config';
+import { pythonBin as getPythonBin } from '../../feat/stages/utils.ts';
 
 type ProgressCallback = (current: number, total: number) => void;
 
@@ -22,7 +23,7 @@ export class MLDaemon {
   }
 
   async start(timeoutMs = 30000): Promise<void> {
-    const pythonBin = join(REPO_ROOT, '.venv', 'bin', 'python');
+    const pythonBin = getPythonBin();
     const scriptPath = join(REPO_ROOT, 'packages', 'cli', 'scripts', 'pipeline_daemon.py');
     const voxcpmSrc = join(REPO_ROOT, 'submodule', 'VoxCPM', 'src');
 

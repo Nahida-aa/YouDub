@@ -5,7 +5,7 @@ import { REPO_ROOT, readEnginesConfig } from '@repo/config';
 import type { TTSEngineConfig } from '@repo/config';
 import { MLDaemon } from '../../ml/daemon/client.ts';
 import { VoxCPMNodeONNX, VoxCPMCloud, VoxCPMPython, writeWav } from '@repo/voxlab';
-import { readTaskLanguages, emitLog, nowISO, updateStageDB } from './utils.ts';
+import { readTaskLanguages, emitLog, nowISO, updateStageDB, pythonBin as getPythonBin } from './utils.ts';
 
 function createTTSBackend(cfg: TTSEngineConfig) {
   if (cfg.runtime === 'cloud') return new VoxCPMCloud();
@@ -24,7 +24,7 @@ async function runPytorchBatch(
 ) {
   const scriptPath = join(REPO_ROOT, 'packages', 'voxlab', 'scripts', 'voxcpm_infer_batch.py');
   const modelDir = join(REPO_ROOT, 'data', 'modelscope', 'OpenBMB__VoxCPM2');
-  const pythonBin = join(REPO_ROOT, '.venv', 'bin', 'python');
+  const pythonBin = getPythonBin();
   const voxcpmSrc = join(REPO_ROOT, 'submodule', 'VoxCPM', 'src');
 
   return new Promise<void>((resolve, reject) => {

@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { REPO_ROOT, readEnginesConfig } from '@repo/config';
 import { MLDaemon } from '../../ml/daemon/client.ts';
-import { readTaskLanguages, nowISO, updateStageDB, emitLog } from './utils.ts';
+import { readTaskLanguages, nowISO, updateStageDB, emitLog, pythonBin as getPythonBin } from './utils.ts';
 
 export async function stageAsr(taskId: string, sessionPath: string, daemon?: MLDaemon) {
   await updateStageDB(taskId, 'asr', { last_message: 'Transcribing...', progress: 0 });
@@ -16,7 +16,7 @@ export async function stageAsr(taskId: string, sessionPath: string, daemon?: MLD
   const { runtime, device } = engines.asr;
   emitLog(taskId, `[ASR] runtime=${runtime} device=${device}`);
 
-  const pythonBin = join(REPO_ROOT, '.venv', 'bin', 'python');
+  const pythonBin = getPythonBin();
   const { asrLanguage } = readTaskLanguages(sessionPath);
 
   if (runtime === 'pytorch' && daemon?.ready) {
